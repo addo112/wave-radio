@@ -1,0 +1,15 @@
+{
+  "name": "wave-radio",
+  "version": "1.0.0",
+  "description": "Wave Radio - Feel The Frequency. 24/7 Internet Radio Station",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'Static site - no build needed'",
+    "deploy": "netlify deploy --prod"
+  },
+  "keywords": ["radio", "streaming", "music", "netlify"],
+  "license": "MIT",
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}

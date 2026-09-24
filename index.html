@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wave Radio - Feel The Frequency</title>
+    <meta name="description" content="Wave Radio - Feel The Frequency. 24/7 Internet Radio streaming the best hits globally.">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#6C5CE7">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Wave Radio - Feel The Frequency">
+    <meta property="og:description" content="24/7 Internet Radio streaming the best hits globally. Crystal clear audio.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://waveradio.app">
+    <meta property="og:image" content="/icons/icon-512.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Critical Inline CSS -->
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0f;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .critical-loader {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #0a0a0f;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        .hidden-loader { opacity: 0; pointer-events: none; }
+    </style>
+
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header / Nav -->
+    <header id="main-header" class="header">
+        <div class="container header-container">
+            <div class="logo-area">
+                <a href="#home" class="logo text-gradient">WAVE RADIO</a>
+                <span class="tagline">Feel The Frequency</span>
+            </div>
+            <nav class="desktop-nav">
+                <ul>
+                    <li><a href="#home" class="active">Home</a></li>
+                    <li><a href="#schedule">Schedule</a></li>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-menu-btn" aria-label="Toggle Menu">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <!-- Mobile Nav -->
+        <nav class="mobile-nav hidden">
+            <ul>
+                <li><a href="#home">Home</a></li>
+                <li><a href="#schedule">Schedule</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <!-- Hero / Now Playing Section -->
+        <section id="home" class="hero-section">
+            <canvas id="visualizer-canvas"></canvas>
+            
+            <div class="container hero-container">
+                <div class="now-playing-header">
+                    <div class="live-indicator">
+                        <span class="live-dot"></span> LIVE
+                    </div>
+                    <h2>NOW PLAYING</h2>
+                </div>
+
+                <div class="player-card glass">
+                    <div class="player-top">
+                        <div class="album-art-container">
+                            <div id="album-art" class="album-art-placeholder">
+                                <i class="fas fa-music"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="track-info">
+                            <h3 id="now-playing-title" class="track-title text-gradient">Loading Track...</h3>
+                            <p id="now-playing-artist" class="track-artist">Wave Radio DJ</p>
+                            
+                            <div class="equalizer">
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                                <div class="bar"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="player-controls">
+                        <button id="play-btn" class="play-button glow" aria-label="Play/Pause">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        
+                        <div class="volume-control">
+                            <i class="fas fa-volume-up volume-icon"></i>
+                            <input type="range" id="volume-slider" min="0" max="100" value="80" aria-label="Volume">
+                        </div>
+                        
+                        <div class="listener-stats">
+                            <span id="listener-count" class="listener-badge">
+                                <i class="fas fa-users"></i> 1,204
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <audio id="radio-stream" crossorigin="anonymous" preload="none"></audio>
+                </div>
+            </div>
+        </section>
+
+        <!-- Schedule Section -->
+        <section id="schedule" class="schedule-section section-padding">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="text-gradient">Daily Schedule</h2>
+                    <p>Don't miss your favorite shows. All times are in your local timezone.</p>
+                </div>
+
+                <div class="schedule-tabs">
+                    <button class="tab-btn active">Today</button>
+                    <button class="tab-btn">Tomorrow</button>
+                    <button class="tab-btn">Weekend</button>
+                </div>
+
+                <div id="schedule-container" class="schedule-grid">
+                    <div class="show-card glass current-show glow">
+                        <div class="show-time">08:00 - 12:00</div>
+                        <div class="show-content">
+                            <h4>Morning Vibes</h4>
+                            <p class="dj-name">DJ Sarah Connor</p>
+                            <span class="genre-tag">Pop / Top 40</span>
+                        </div>
+                        <div class="show-status">ON AIR</div>
+                    </div>
+                    
+                    <div class="show-card glass">
+                        <div class="show-time">12:00 - 16:00</div>
+                        <div class="show-content">
+                            <h4>Lunchtime Mix</h4>
+                            <p class="dj-name">DJ Marcus Vance</p>
+                            <span class="genre-tag">House / Electronic</span>
+                        </div>
+                    </div>
+                    
+                    <div class="show-card glass">
+                        <div class="show-time">16:00 - 20:00</div>
+                        <div class="show-content">
+                            <h4>Drive Time Drive</h4>
+                            <p class="dj-name">DJ Alex Rivera</p>
+                            <span class="genre-tag">Rock / Alternative</span>
+                        </div>
+                    </div>
+                    
+                    <div class="show-card glass">
+                        <div class="show-time">20:00 - 00:00</div>
+                        <div class="show-content">
+                            <h4>Night Grooves</h4>
+                            <p class="dj-name">DJ Maya Lin</p>
+                            <span class="genre-tag">R&B / Soul</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about" class="about-section section-padding">
+            <div class="container">
+                <div class="about-content">
+                    <div class="about-text">
+                        <h2 class="text-gradient">About Wave Radio</h2>
+                        <p>Founded in 2024, Wave Radio is a community-driven internet radio station dedicated to bringing you the best music, 24/7. We believe in the power of frequency to connect people globally.</p>
+                        <p>Our crystal clear audio streams ensure you hear every beat, every lyric, and every drop just as the artist intended.</p>
+                    </div>
+                    
+                    <div class="features-grid">
+                        <div class="feature-card glass">
+                            <div class="feature-icon icon-gradient"><i class="fas fa-clock"></i></div>
+                            <h4>24/7 Streaming</h4>
+                            <p>Non-stop music around the clock, wherever you are.</p>
+                        </div>
+                        <div class="feature-card glass">
+                            <div class="feature-icon icon-gradient"><i class="fas fa-globe"></i></div>
+                            <h4>Global Reach</h4>
+                            <p>Tuning in from over 150 countries worldwide.</p>
+                        </div>
+                        <div class="feature-card glass">
+                            <div class="feature-icon icon-gradient"><i class="fas fa-headphones-alt"></i></div>
+                            <h4>Crystal Clear Audio</h4>
+                            <p>High bitrate streaming for audiophile quality sound.</p>
+                        </div>
+                        <div class="feature-card glass">
+                            <div class="feature-icon icon-gradient"><i class="fas fa-users"></i></div>
+                            <h4>Community Driven</h4>
+                            <p>Requests, shoutouts, and shows built around you.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact" class="contact-section section-padding">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="text-gradient">Get In Touch</h2>
+                    <p>Request a song, send a shoutout, or just say hello!</p>
+                </div>
+
+                <div class="contact-container">
+                    <form class="contact-form glass" name="contact" method="POST" data-netlify="true" netlify>
+                        <div class="form-group">
+                            <input type="text" id="name" name="name" required placeholder=" ">
+                            <label for="name">Your Name</label>
+                        </div>
+                        <div class="form-group">
+                            <input type="email" id="email" name="email" required placeholder=" ">
+                            <label for="email">Your Email</label>
+                        </div>
+                        <div class="form-group">
+                            <textarea id="message" name="message" required placeholder=" " rows="5"></textarea>
+                            <label for="message">Your Message</label>
+                        </div>
+                        <button type="submit" class="submit-btn gradient-bg glow">Send Message <i class="fas fa-paper-plane"></i></button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-container">
+            <div class="footer-brand">
+                <div class="logo text-gradient">WAVE RADIO</div>
+                <p>Feel The Frequency</p>
+                <div class="social-links">
+                    <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="#" aria-label="Discord"><i class="fab fa-discord"></i></a>
+                </div>
+            </div>
+            
+            <div class="footer-links">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="#home">Home</a></li>
+                    <li><a href="#schedule">Schedule</a></li>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </div>
+            
+            <div class="footer-legal">
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Cookie Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2024 Wave Radio. All rights reserved.</p>
+            <p class="powered-by">Powered by Wave Radio</p>
+        </div>
+    </footer>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Cookie Banner -->
+    <div id="cookie-banner" class="cookie-banner glass hidden">
+        <div class="cookie-content">
+            <p>We use cookies to ensure you get the best listening experience on our website and to power our audio streams.</p>
+            <div class="cookie-buttons">
+                <button id="accept-cookies" class="btn gradient-bg">Accept All</button>
+                <button id="decline-cookies" class="btn btn-outline">Essential Only</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+    <script>
+        // Remove critical loader if present
+        document.addEventListener("DOMContentLoaded", () => {
+            const loader = document.querySelector('.critical-loader');
+            if(loader) {
+                setTimeout(() => loader.classList.add('hidden-loader'), 100);
+            }
+        });
+    </script>
+</body>
+</html>
