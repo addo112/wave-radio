@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wave Radio - DJ Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6C5CE7;
+            --secondary: #00CEC9;
+            --accent: #FD79A8;
+            --dark: #0a0a0f;
+            --dark-surface: #12121a;
+            --dark-card: #1a1a2e;
+            --text-main: #f8f8f9;
+            --text-muted: #a0a0b0;
+            --glass-bg: rgba(26, 26, 46, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* Typography & Utilities */
+        h1, h2, h3, h4 { margin-bottom: 0.5rem; font-weight: 700; }
+        p { color: var(--text-muted); margin-bottom: 1rem; }
+        .text-gradient {
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* Form elements */
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-family: inherit;
+            margin-bottom: 1rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus {
+            border-color: var(--primary);
+        }
+        
+        button {
+            cursor: pointer;
+            font-family: inherit;
+            border: none;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 12px 24px;
+        }
+        
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Login Gate */
+        #login-gate {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, var(--dark-surface) 0%, var(--dark) 100%);
+            z-index: 1000;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-card h2 {
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+        }
+        .login-card .hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 1rem;
+        }
+
+        /* Dashboard Layout */
+        #dashboard {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            border-radius: 12px;
+        }
+        .header-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+        .dot.connected {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        /* Main Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            flex: 1;
+        }
+        
+        @media (max-width: 900px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .main-col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .side-col {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Main Controls Panel */
+        .main-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+            min-height: 400px;
+        }
+
+        .mic-selection {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 30px;
+        }
+
+        .level-meter-container {
+            width: 100%;
+            max-width: 400px;
+            height: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 40px;
+            border: 1px solid var(--glass-border);
+        }
+
+        #level-meter-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--success) 0%, var(--warning) 70%, var(--danger) 100%);
+            transition: width 0.1s ease-out;
+            transform-origin: left;
+        }
+
+        /* GO LIVE BUTTON */
+        .go-live-wrapper {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        #go-live-btn {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 800;
+            border: 4px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            transition: all 0.3s;
+        }
+        
+        #go-live-btn:hover {
+            transform: scale(1.05);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        #go-live-btn.live {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            animation: pulse-live 2s infinite;
+        }
+
+        @keyframes pulse-live {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+
+        .monitor-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        /* Broadcast Info */
+        .info-panel h3, .settings-panel h3, .server-panel h3 {
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .stat-box {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--secondary);
+            margin-top: 5px;
+        }
+
+        /* Toggle Switches */
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Server log */
+        .log-container {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+        .log-msg { margin-bottom: 4px; }
+        .log-msg.info { color: var(--text-main); }
+        .log-msg.success { color: var(--success); }
+        .log-msg.error { color: var(--danger); }
+        .log-msg.warning { color: var(--warning); }
+        .log-time { color: var(--text-muted); margin-right: 8px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Login Gate -->
+    <div id="login-gate" class="gate-container">
+        <div class="login-card glass-card">
+            <h2 class="text-gradient">Wave Radio DJ</h2>
+            <p>Login to start your broadcast</p>
+            <form id="login-form">
+                <input type="text" id="login-name" placeholder="DJ Name" required autocomplete="off">
+                <input type="password" id="login-password" placeholder="Password" required>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Enter Dashboard</button>
+            </form>
+            <p class="hint">Hint: waveradio2024</p>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" style="display: none;">
+        <!-- Header -->
+        <header class="glass-card">
+            <div class="header-logo text-gradient">
+                <i class="fas fa-wave-square"></i> Wave Radio
+            </div>
+            <div class="header-controls">
+                <div class="status-indicator">
+                    <span class="dot" id="connection-dot"></span>
+                    <span id="connection-status-text">Disconnected</span>
+                </div>
+                <button class="btn" id="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="main-col">
+                <!-- Main Controls Panel -->
+                <div class="main-controls glass-card">
+                    <div class="mic-selection">
+                        <select id="mic-select">
+                            <option value="">Loading microphones...</option>
+                        </select>
+                        <button class="btn" id="btn-refresh-mics" title="Refresh Mics"><i class="fas fa-sync"></i></button>
+                    </div>
+
+                    <div class="level-meter-container">
+                        <div id="level-meter-fill"></div>
+                    </div>
+
+                    <div class="go-live-wrapper">
+                        <button id="go-live-btn">
+                            <i class="fas fa-microphone-alt"></i>
+                            <span id="go-live-text">GO LIVE</span>
+                        </button>
+                    </div>
+
+                    <label class="monitor-toggle">
+                        <input type="checkbox" id="toggle-monitor">
+                        <span>Monitor Audio (Hear yourself)</span>
+                    </label>
+                </div>
+
+                <!-- Broadcast Info Panel -->
+                <div class="info-panel glass-card">
+                    <h3><i class="fas fa-info-circle"></i> Broadcast Info</h3>
+                    <input type="text" id="show-title-input" placeholder="Enter Show Title (Max 100 chars)" maxlength="100">
+                    <div class="stat-grid">
+                        <div class="stat-box">
+                            <div>Duration</div>
+                            <div class="stat-value" id="broadcast-timer">00:00:00</div>
+                        </div>
+                        <div class="stat-box">
+                            <div>Listeners</div>
+                            <div class="stat-value" id="dj-listener-count">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="side-col">
+                <!-- Audio Settings Panel -->
+                <div class="settings-panel glass-card">
+                    <h3><i class="fas fa-sliders-h"></i> Audio Settings</h3>
+                    <label style="display: block; margin-bottom: 8px; color: var(--text-muted);">Audio Quality</label>
+                    <select id="audio-quality">
+                        <option value="32000">Low (32kbps)</option>
+                        <option value="64000">Medium (64kbps)</option>
+                        <option value="128000" selected>High (128kbps)</option>
+                        <option value="256000">Ultra (256kbps)</option>
+                    </select>
+
+                    <div class="toggle-row">
+                        <span>Echo Cancellation</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-echo" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Noise Suppression</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-noise" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Auto Gain Control</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggle-agc" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Server Connection Panel -->
+                <div class="server-panel glass-card">
+                    <h3><i class="fas fa-server"></i> Server</h3>
+                    <input type="text" id="server-url" value="ws://localhost:3000" placeholder="Relay Server URL">
+                    <button class="btn btn-primary" id="btn-connect" style="width: 100%;">Connect to Server</button>
+                    
+                    <div class="log-container" id="status-log">
+                        <!-- Logs go here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class DJBroadcaster {
+            constructor() {
+                this.ws = null;
+                this.mediaStream = null;
+                this.mediaRecorder = null;
+                
+                // Audio Nodes
+                this.audioContext = null;
+                this.analyser = null;
+                this.source = null;
+                this.monitorNode = null;
+                
+                // State
+                this.isLive = false;
+                this.broadcastStartTime = null;
+                this.timerInterval = null;
+                this.animationFrameId = null;
+                
+                // Config
+                this.serverUrl = 'ws://localhost:3000';
+                this.djName = '';
+                this.authToken = '';
+                
+                // DOM Elements
+                this.els = {
+                    micSelect: document.getElementById('mic-select'),
+                    refreshMicsBtn: document.getElementById('btn-refresh-mics'),
+                    levelMeter: document.getElementById('level-meter-fill'),
+                    goLiveBtn: document.getElementById('go-live-btn'),
+                    goLiveText: document.getElementById('go-live-text'),
+                    monitorToggle: document.getElementById('toggle-monitor'),
+                    showTitle: document.getElementById('show-title-input'),
+                    timer: document.getElementById('broadcast-timer'),
+                    listenerCount: document.getElementById('dj-listener-count'),
+                    quality: document.getElementById('audio-quality'),
+                    toggleEcho: document.getElementById('toggle-echo'),
+                    toggleNoise: document.getElementById('toggle-noise'),
+                    toggleAgc: document.getElementById('toggle-agc'),
+                    serverUrl: document.getElementById('server-url'),
+                    btnConnect: document.getElementById('btn-connect'),
+                    statusLog: document.getElementById('status-log'),
+                    connDot: document.getElementById('connection-dot'),
+                    connText: document.getElementById('connection-status-text')
+                };
+            }
+
+            async init(djName, token) {
+                this.djName = djName;
+                this.authToken = token;
+                
+                await this.enumerateDevices();
+                this.setupEventListeners();
+                this.log('Dashboard initialized.', 'info');
+                
+                // Auto connect to default server
+                this.els.serverUrl.value = localStorage.getItem('relay-ws-url') || 'ws://localhost:3000';
+                this.serverUrl = this.els.serverUrl.value;
+                this.connectToServer();
+            }
+
+            setupEventListeners() {
+                this.els.refreshMicsBtn.addEventListener('click', () => this.enumerateDevices());
+                
+                this.els.btnConnect.addEventListener('click', () => {
+                    this.serverUrl = this.els.serverUrl.value;
+                    localStorage.setItem('relay-ws-url', this.serverUrl);
+                    this.connectToServer();
+                });
+
+                this.els.goLiveBtn.addEventListener('click', () => {
+                    if (this.isLive) {
+                        this.stopBroadcasting();
+                    } else {
+                        this.startBroadcasting();
+                    }
+                });
+
+                this.els.monitorToggle.addEventListener('change', (e) => {
+                    this.toggleMonitor(e.target.checked);
+                });
+
+                window.addEventListener('beforeunload', () => {
+                    if (this.isLive) {
+                        this.stopBroadcasting();
+                    }
+                });
+            }
+
+            async enumerateDevices() {
+                try {
+                    await navigator.mediaDevices.getUserMedia({ audio: true }); // Ask permission first
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const audioInputs = devices.filter(d => d.kind === 'audioinput');
+                    
+                    this.els.micSelect.innerHTML = '';
+                    if (audioInputs.length === 0) {
+                        this.els.micSelect.innerHTML = '<option value="">No microphones found</option>';
+                        return;
+                    }
+
+                    audioInputs.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.deviceId;
+                        option.text = device.label || `Microphone ${this.els.micSelect.length + 1}`;
+                        this.els.micSelect.appendChild(option);
+                    });
+                    this.log('Microphones refreshed.', 'info');
+                } catch (err) {
+                    this.log('Error accessing microphones: ' + err.message, 'error');
+                }
+            }
+
+            connectToServer() {
+                if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+                    this.ws.close();
+                }
+
+                this.log(`Connecting to ${this.serverUrl}...`, 'info');
+                this.els.connDot.classList.remove('connected');
+                this.els.connText.textContent = 'Connecting...';
+
+                try {
+                    this.ws = new WebSocket(this.serverUrl);
+                    
+                    this.ws.onopen = () => {
+                        this.log('Connected to relay server.', 'success');
+                        this.els.connDot.classList.add('connected');
+                        this.els.connText.textContent = 'Connected';
+                        
+                        // Send auth
+                        this.ws.send(JSON.stringify({
+                            type: 'auth',
+                            token: this.authToken,
+                            djName: this.djName
+                        }));
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        if (typeof event.data === 'string') {
+                            try {
+                                const msg = JSON.parse(event.data);
+                                this.handleServerMessage(msg);
+                            } catch (e) {
+                                console.error('Error parsing server message', e);
+                            }
+                        }
+                    };
+
+                    this.ws.onclose = () => {
+                        this.log('Disconnected from server.', 'warning');
+                        this.els.connDot.classList.remove('connected');
+                        this.els.connText.textContent = 'Disconnected';
+                        
+                        if (this.isLive) {
+                            this.stopBroadcasting();
+                            this.log('Broadcast stopped due to disconnect.', 'error');
+                            // Auto reconnect attempt
+                            setTimeout(() => this.connectToServer(), 3000);
+                        }
+                    };
+
+                    this.ws.onerror = (err) => {
+                        this.log('WebSocket error occurred.', 'error');
+                    };
+
+                } catch (err) {
+                    this.log('Connection failed: ' + err.message, 'error');
+                }
+            }
+
+            handleServerMessage(msg) {
+                switch (msg.type) {
+                    case 'auth_ok':
+                        this.log('Authentication successful.', 'success');
+                        break;
+                    case 'auth_fail':
+                        this.log('Authentication failed! Invalid token.', 'error');
+                        if (this.ws) this.ws.close();
+                        break;
+                    case 'listener_count':
+                        this.els.listenerCount.textContent = msg.count || 0;
+                        break;
+                    case 'error':
+                        this.log('Server Error: ' + msg.message, 'error');
+                        break;
+                }
+            }
+
+            async startBroadcasting() {
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.log('Cannot go live: Not connected to server.', 'error');
+                    alert('Please connect to the relay server first.');
+                    return;
+                }
+
+                try {
+                    const deviceId = this.els.micSelect.value;
+                    const constraints = {
+                        audio: {
+                            deviceId: deviceId ? { exact: deviceId } : undefined,
+                            echoCancellation: this.els.toggleEcho.checked,
+                            noiseSuppression: this.els.toggleNoise.checked,
+                            autoGainControl: this.els.toggleAgc.checked,
+                        }
+                    };
+
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                    // Setup Audio Context for metering and monitoring
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
+                    
+                    this.analyser = this.audioContext.createAnalyser();
+                    this.analyser.fftSize = 256;
+                    this.source.connect(this.analyser);
+
+                    // Setup monitor
+                    this.monitorNode = this.audioContext.createGain();
+                    this.monitorNode.gain.value = 1.0;
+                    this.source.connect(this.monitorNode);
+                    if (this.els.monitorToggle.checked) {
+                        this.monitorNode.connect(this.audioContext.destination);
+                    }
+
+                    // Setup MediaRecorder
+                    const audioBps = parseInt(this.els.quality.value, 10);
+                    const options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: audioBps };
+                    
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        this.log('audio/webm;codecs=opus not supported, using default.', 'warning');
+                        delete options.mimeType;
+                    }
+
+                    this.mediaRecorder = new MediaRecorder(this.mediaStream, options);
+
+                    this.mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                            this.ws.send(e.data); // send binary chunk
+                        }
+                    };
+
+                    this.mediaRecorder.start(250); // 250ms chunks
+
+                    // Notify server
+                    this.ws.send(JSON.stringify({
+                        type: 'start',
+                        showTitle: this.els.showTitle.value || 'Live DJ Set',
+                        djName: this.djName
+                    }));
+
+                    // Update UI & State
+                    this.isLive = true;
+                    this.broadcastStartTime = new Date();
+                    
+                    this.els.goLiveBtn.classList.add('live');
+                    this.els.goLiveText.textContent = 'STOP';
+                    
+                    // Disable settings while live
+                    this.els.micSelect.disabled = true;
+                    this.els.quality.disabled = true;
+                    this.els.toggleEcho.disabled = true;
+                    this.els.toggleNoise.disabled = true;
+                    this.els.toggleAgc.disabled = true;
+
+                    // Start loops
+                    this.updateLevelMeter();
+                    this.timerInterval = setInterval(() => this.updateTimer(), 1000);
+                    this.updateTimer();
+
+                    this.log('BROADCAST STARTED.', 'success');
+
+                } catch (err) {
+                    this.log('Failed to start broadcast: ' + err.message, 'error');
+                    console.error(err);
+                }
+            }
+
+            stopBroadcasting() {
+                if (!this.isLive) return;
+
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    this.mediaRecorder.stop();
+                }
+
+                if (this.mediaStream) {
+                    this.mediaStream.getTracks().forEach(track => track.stop());
+                }
+
+                if (this.audioContext) {
+                    this.audioContext.close();
+                }
+
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'stop' }));
+                }
+
+                // Reset state
+                this.isLive = false;
+                clearInterval(this.timerInterval);
+                cancelAnimationFrame(this.animationFrameId);
+                this.els.levelMeter.style.width = '0%';
+                
+                // Update UI
+                this.els.goLiveBtn.classList.remove('live');
+                this.els.goLiveText.textContent = 'GO LIVE';
+                
+                this.els.micSelect.disabled = false;
+                this.els.quality.disabled = false;
+                this.els.toggleEcho.disabled = false;
+                this.els.toggleNoise.disabled = false;
+                this.els.toggleAgc.disabled = false;
+
+                this.log('Broadcast stopped.', 'warning');
+            }
+
+            updateLevelMeter() {
+                if (!this.isLive || !this.analyser) return;
+
+                const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                this.analyser.getByteFrequencyData(dataArray);
+
+                let sum = 0;
+                for(let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                const average = sum / dataArray.length;
+                
+                // map 0-255 to 0-100%
+                const width = Math.min(100, Math.max(0, (average / 255) * 100 * 1.5)); 
+                
+                this.els.levelMeter.style.width = `${width}%`;
+
+                this.animationFrameId = requestAnimationFrame(() => this.updateLevelMeter());
+            }
+
+            updateTimer() {
+                const now = new Date();
+                const diff = Math.floor((now - this.broadcastStartTime) / 1000);
+                
+                const h = Math.floor(diff / 3600).toString().padStart(2, '0');
+                const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+                const s = (diff % 60).toString().padStart(2, '0');
+                
+                this.els.timer.textContent = `${h}:${m}:${s}`;
+            }
+
+            toggleMonitor(enabled) {
+                if (!this.audioContext || !this.monitorNode) return;
+                
+                if (enabled) {
+                    this.monitorNode.connect(this.audioContext.destination);
+                } else {
+                    this.monitorNode.disconnect();
+                }
+            }
+
+            log(message, type = 'info') {
+                const now = new Date();
+                const timeStr = now.toTimeString().split(' ')[0];
+                
+                const div = document.createElement('div');
+                div.className = `log-msg ${type}`;
+                div.innerHTML = `<span class="log-time">[${timeStr}]</span>${message}`;
+                
+                this.els.statusLog.appendChild(div);
+                this.els.statusLog.scrollTop = this.els.statusLog.scrollHeight;
+            }
+        }
+
+        // App Initialization & Login Logic
+        const broadcaster = new DJBroadcaster();
+        
+        const loginForm = document.getElementById('login-form');
+        const loginNameInput = document.getElementById('login-name');
+        const loginPassInput = document.getElementById('login-password');
+        const loginGate = document.getElementById('login-gate');
+        const dashboard = document.getElementById('dashboard');
+        const btnLogout = document.getElementById('btn-logout');
+
+        // Check session
+        const storedDJ = sessionStorage.getItem('wave_dj_name');
+        const storedToken = sessionStorage.getItem('wave_dj_token');
+        
+        if (storedDJ && storedToken) {
+            loginGate.style.display = 'none';
+            dashboard.style.display = 'flex';
+            broadcaster.init(storedDJ, storedToken);
+        }
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const djName = loginNameInput.value.trim();
+            const pass = loginPassInput.value;
+            
+            // Demo password validation
+            if (pass === 'waveradio2024') {
+                sessionStorage.setItem('wave_dj_name', djName);
+                sessionStorage.setItem('wave_dj_token', pass);
+                
+                loginGate.style.display = 'none';
+                dashboard.style.display = 'flex';
+                
+                broadcaster.init(djName, pass);
+            } else {
+                alert('Invalid password.');
+            }
+        });
+
+        btnLogout.addEventListener('click', () => {
+            if (broadcaster.isLive) {
+                if(!confirm('You are currently live! Are you sure you want to stop broadcasting and logout?')) {
+                    return;
+                }
+                broadcaster.stopBroadcasting();
+            }
+            if (broadcaster.ws) broadcaster.ws.close();
+            
+            sessionStorage.removeItem('wave_dj_name');
+            sessionStorage.removeItem('wave_dj_token');
+            
+            dashboard.style.display = 'none';
+            loginGate.style.display = 'flex';
+            loginPassInput.value = '';
+        });
+
+    </script>
+</body>
+</html>
