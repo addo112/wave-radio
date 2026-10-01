@@ -134,6 +134,6 @@ class DJBridge {
 // Auto-initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   // Configure relay server URL here
-  const RELAY_SERVER = localStorage.getItem('relay-server-url') || 'http://localhost:3000';
+  const RELAY_SERVER = localStorage.getItem('relay-server-url') || 'https://wave-radio-relay.onrender.com';
   window.djBridge = new DJBridge(RELAY_SERVER);
 });
