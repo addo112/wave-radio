@@ -1,76 +1,61 @@
-const CACHE_NAME = 'wave-radio-cache-v1';
+/**
+ * Wave Radio service worker
+ * - Network-first for same-origin pages/assets (always get the latest deploy, fall back to cache offline)
+ * - Never touches non-GET requests or cross-origin requests (audio streams, relay server, CDNs)
+ */
+const CACHE_NAME = 'wave-radio-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.json'
-  // Add other static assets like fonts and icons here
+  '/dj.html',
+  '/css/style.css',
+  '/js/app.js',
+  '/js/dj-bridge.js',
+  '/manifest.json',
 ];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) =>
+      // Cache each asset individually so one missing file can't break installation
+      Promise.all(STATIC_ASSETS.map((url) => cache.add(url).catch(() => null)))
+    )
   );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys()
+      .then((names) => Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n))))
+      .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  const requestUrl = new URL(event.request.url);
+  const { request } = event;
+  if (request.method !== 'GET') return;
 
-  // Network-first for API calls
-  if (requestUrl.pathname.startsWith('/api/') || requestUrl.pathname.startsWith('/.netlify/functions/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          // Optionally cache API responses if needed
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;           // audio streams, relay server, CDNs
+  if (url.pathname.startsWith('/.netlify/') || url.pathname.startsWith('/api/')) return;
+  if (request.headers.get('range')) return;                   // media range requests
 
-  // Cache-first for static assets
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request)
-        .then((response) => {
-          // Cache successful dynamic requests for static assets
-          if (response && response.status === 200 && response.type === 'basic') {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return response;
+    fetch(request)
+      .then((response) => {
+        if (response && response.ok && response.type === 'basic') {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(request).then((cached) => {
+          if (cached) return cached;
+          if (request.mode === 'navigate') return caches.match('/index.html');
+          return Response.error();
         })
-        .catch(() => {
-          // Offline fallback
-          if (event.request.headers.get('accept').includes('text/html')) {
-            return caches.match('/');
-          }
-        });
-    })
+      )
   );
 });

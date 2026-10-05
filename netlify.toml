@@ -12,23 +12,30 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "autoplay=(self), microphone=()"
+    Permissions-Policy = "autoplay=(self), microphone=(self)"
     Access-Control-Allow-Origin = "*"
 
+# JS/CSS/HTML/SW revalidate on every load (Netlify serves 304s via ETag, so this is cheap)
+# and guarantees listeners and DJs always get the latest deploy.
 [[headers]]
   for = "/*.js"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/*.css"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
-  for = "/index.html"
+  for = "/*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
 
 # Redirects for SPA
 [[redirects]]
