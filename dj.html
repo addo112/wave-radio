@@ -393,7 +393,7 @@
                 <input type="password" id="login-password" placeholder="Password" required>
                 <button type="submit" class="btn btn-primary" style="width: 100%;">Enter Dashboard</button>
             </form>
-            <p class="hint">Hint: waveradio2024</p>
+            <p class="hint">Use the DJ password set on your relay server.</p>
         </div>
     </div>
 
@@ -507,31 +507,80 @@
         </div>
     </div>
 
+    <style>
+        .dot.connecting { background: var(--warning) !important; box-shadow: 0 0 8px var(--warning); animation: dotBlink 1s infinite; }
+        @keyframes dotBlink { 50% { opacity: .3; } }
+        #btn-connect.is-connected { background: rgba(231, 76, 60, 0.85); }
+        #btn-connect:disabled { opacity: .6; cursor: wait; }
+    </style>
     <script>
+        /** Default public relay server (Render.com). Change this if you deploy elsewhere. */
+        const DEFAULT_RELAY_WS = 'wss://wave-radio-relay.onrender.com/ws';
+        const WAKE_TIMEOUT_MS = 75000; // Render free tier can take ~50s to wake up
+
+        /**
+         * Normalises whatever the user types into a valid WebSocket URL:
+         *  - adds a scheme if missing, converts http(s) → ws(s)
+         *  - forces wss:// when the page is served over https (browsers block ws:// there)
+         *  - appends the /ws path if no path was given
+         */
+        function normalizeRelayUrl(input) {
+            let raw = (input || '').trim();
+            if (!raw) return DEFAULT_RELAY_WS;
+            if (!/^[a-z]+:\/\//i.test(raw)) raw = 'wss://' + raw;
+            raw = raw.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://');
+
+            let url;
+            try { url = new URL(raw); } catch { return DEFAULT_RELAY_WS; }
+
+            const isLocal = ['localhost', '127.0.0.1'].includes(url.hostname);
+            if (location.protocol === 'https:' && url.protocol === 'ws:' && !isLocal) url.protocol = 'wss:';
+            if (url.pathname === '/' || url.pathname === '') url.pathname = '/ws';
+            return url.toString().replace(/\/$/, '');
+        }
+
+        /** ws(s)://host/ws → http(s)://host  (used to wake the server and read /status) */
+        function relayHttpBase(wsUrl) {
+            const u = new URL(wsUrl);
+            u.protocol = u.protocol === 'wss:' ? 'https:' : 'http:';
+            u.pathname = '';
+            return u.toString().replace(/\/$/, '');
+        }
+
+        /** Picks the saved URL unless it is a localhost URL saved while on a public site. */
+        function initialRelayUrl() {
+            const saved = localStorage.getItem('relay-ws-url');
+            const onPublicSite = !['localhost', '127.0.0.1', ''].includes(location.hostname);
+            if (saved && !(onPublicSite && /localhost|127\.0\.0\.1/.test(saved))) return normalizeRelayUrl(saved);
+            return DEFAULT_RELAY_WS;
+        }
+
         class DJBroadcaster {
             constructor() {
                 this.ws = null;
                 this.mediaStream = null;
                 this.mediaRecorder = null;
-                
-                // Audio Nodes
+
                 this.audioContext = null;
                 this.analyser = null;
                 this.source = null;
                 this.monitorNode = null;
-                
-                // State
+
                 this.isLive = false;
+                this.isAuthenticated = false;
+                this.manualDisconnect = false;
+                this.resumeAfterReconnect = false;
+                this.reconnectAttempts = 0;
+                this.reconnectTimer = null;
                 this.broadcastStartTime = null;
                 this.timerInterval = null;
                 this.animationFrameId = null;
-                
-                // Config
-                this.serverUrl = 'ws://localhost:3000';
+                this.initialized = false;
+
+                this.serverUrl = DEFAULT_RELAY_WS;
                 this.djName = '';
                 this.authToken = '';
-                
-                // DOM Elements
+
                 this.els = {
                     micSelect: document.getElementById('mic-select'),
                     refreshMicsBtn: document.getElementById('btn-refresh-mics'),
@@ -557,329 +606,452 @@
             async init(djName, token) {
                 this.djName = djName;
                 this.authToken = token;
-                
-                await this.enumerateDevices();
-                this.setupEventListeners();
+
+                if (!this.initialized) {
+                    this.setupEventListeners();
+                    this.initialized = true;
+                }
                 this.log('Dashboard initialized.', 'info');
-                
-                // Auto connect to default server
-                this.els.serverUrl.value = localStorage.getItem('relay-ws-url') || 'ws://localhost:3000';
-                this.serverUrl = this.els.serverUrl.value;
+
+                this.serverUrl = initialRelayUrl();
+                this.els.serverUrl.value = this.serverUrl;
+
+                // Don't block the connection on the microphone permission prompt
+                this.enumerateDevices();
                 this.connectToServer();
             }
 
             setupEventListeners() {
                 this.els.refreshMicsBtn.addEventListener('click', () => this.enumerateDevices());
-                
+
                 this.els.btnConnect.addEventListener('click', () => {
-                    this.serverUrl = this.els.serverUrl.value;
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isAuthenticated) {
+                        this.disconnect();
+                        return;
+                    }
+                    this.serverUrl = normalizeRelayUrl(this.els.serverUrl.value);
+                    this.els.serverUrl.value = this.serverUrl;
                     localStorage.setItem('relay-ws-url', this.serverUrl);
+                    this.reconnectAttempts = 0;
                     this.connectToServer();
+                });
+
+                this.els.serverUrl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') this.els.btnConnect.click();
                 });
 
                 this.els.goLiveBtn.addEventListener('click', () => {
                     if (this.isLive) {
+                        this.resumeAfterReconnect = false;
                         this.stopBroadcasting();
                     } else {
                         this.startBroadcasting();
                     }
                 });
 
-                this.els.monitorToggle.addEventListener('change', (e) => {
-                    this.toggleMonitor(e.target.checked);
+                this.els.monitorToggle.addEventListener('change', (e) => this.toggleMonitor(e.target.checked));
+
+                this.els.showTitle.addEventListener('change', () => {
+                    if (this.isLive) this.send({ type: 'metadata', showTitle: this.els.showTitle.value });
                 });
 
-                window.addEventListener('beforeunload', () => {
+                window.addEventListener('beforeunload', (e) => {
                     if (this.isLive) {
-                        this.stopBroadcasting();
+                        e.preventDefault();
+                        e.returnValue = '';
+                    }
+                });
+                window.addEventListener('pagehide', () => {
+                    if (this.isLive) this.stopBroadcasting();
+                });
+
+                // Reconnect quickly when the network comes back
+                window.addEventListener('online', () => {
+                    if (!this.manualDisconnect && (!this.ws || this.ws.readyState > WebSocket.OPEN)) {
+                        this.log('Network is back — reconnecting...', 'info');
+                        this.connectToServer();
                     }
                 });
             }
 
             async enumerateDevices() {
                 try {
-                    await navigator.mediaDevices.getUserMedia({ audio: true }); // Ask permission first
+                    // Ask permission once so device labels are visible, then release the mic
+                    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    tmp.getTracks().forEach(t => t.stop());
+
                     const devices = await navigator.mediaDevices.enumerateDevices();
                     const audioInputs = devices.filter(d => d.kind === 'audioinput');
-                    
+
+                    const previous = this.els.micSelect.value;
                     this.els.micSelect.innerHTML = '';
                     if (audioInputs.length === 0) {
                         this.els.micSelect.innerHTML = '<option value="">No microphones found</option>';
+                        this.log('No microphones found.', 'warning');
                         return;
                     }
-
-                    audioInputs.forEach(device => {
+                    audioInputs.forEach((device, i) => {
                         const option = document.createElement('option');
                         option.value = device.deviceId;
-                        option.text = device.label || `Microphone ${this.els.micSelect.length + 1}`;
+                        option.text = device.label || `Microphone ${i + 1}`;
                         this.els.micSelect.appendChild(option);
                     });
-                    this.log('Microphones refreshed.', 'info');
+                    if (previous && [...this.els.micSelect.options].some(o => o.value === previous)) {
+                        this.els.micSelect.value = previous;
+                    }
+                    this.log(`Found ${audioInputs.length} microphone(s).`, 'info');
                 } catch (err) {
-                    this.log('Error accessing microphones: ' + err.message, 'error');
+                    this.els.micSelect.innerHTML = '<option value="">Microphone access blocked</option>';
+                    this.log('Microphone access denied: allow mic permission in your browser (padlock icon in the address bar).', 'error');
                 }
             }
 
-            connectToServer() {
-                if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
-                    this.ws.close();
-                }
+            setStatus(state, text) {
+                this.els.connDot.classList.remove('connected', 'connecting');
+                if (state === 'connected') this.els.connDot.classList.add('connected');
+                if (state === 'connecting') this.els.connDot.classList.add('connecting');
+                this.els.connText.textContent = text;
 
-                this.log(`Connecting to ${this.serverUrl}...`, 'info');
-                this.els.connDot.classList.remove('connected');
-                this.els.connText.textContent = 'Connecting...';
+                const btn = this.els.btnConnect;
+                btn.disabled = state === 'connecting';
+                btn.classList.toggle('is-connected', state === 'connected');
+                btn.textContent = state === 'connected' ? 'Disconnect'
+                                : state === 'connecting' ? 'Connecting...'
+                                : 'Connect to Server';
+            }
 
+            /** Wakes a sleeping server (Render free tier) by hitting /health before opening the socket. */
+            async wakeServer() {
+                const base = relayHttpBase(this.serverUrl);
+                const controller = new AbortController();
+                const slowNotice = setTimeout(() => {
+                    this.log('Server is waking up from sleep (free hosting) — this can take up to a minute...', 'warning');
+                    this.setStatus('connecting', 'Waking server...');
+                }, 3000);
+                const abort = setTimeout(() => controller.abort(), WAKE_TIMEOUT_MS);
                 try {
-                    this.ws = new WebSocket(this.serverUrl);
-                    
-                    this.ws.onopen = () => {
-                        this.log('Connected to relay server.', 'success');
-                        this.els.connDot.classList.add('connected');
-                        this.els.connText.textContent = 'Connected';
-                        
-                        // Send auth
-                        this.ws.send(JSON.stringify({
-                            type: 'auth',
-                            token: this.authToken,
-                            djName: this.djName
-                        }));
-                    };
-
-                    this.ws.onmessage = (event) => {
-                        if (typeof event.data === 'string') {
-                            try {
-                                const msg = JSON.parse(event.data);
-                                this.handleServerMessage(msg);
-                            } catch (e) {
-                                console.error('Error parsing server message', e);
-                            }
-                        }
-                    };
-
-                    this.ws.onclose = () => {
-                        this.log('Disconnected from server.', 'warning');
-                        this.els.connDot.classList.remove('connected');
-                        this.els.connText.textContent = 'Disconnected';
-                        
-                        if (this.isLive) {
-                            this.stopBroadcasting();
-                            this.log('Broadcast stopped due to disconnect.', 'error');
-                            // Auto reconnect attempt
-                            setTimeout(() => this.connectToServer(), 3000);
-                        }
-                    };
-
-                    this.ws.onerror = (err) => {
-                        this.log('WebSocket error occurred.', 'error');
-                    };
-
+                    const res = await fetch(`${base}/health`, { cache: 'no-store', signal: controller.signal });
+                    return res.ok;
                 } catch (err) {
-                    this.log('Connection failed: ' + err.message, 'error');
+                    return false;
+                } finally {
+                    clearTimeout(slowNotice);
+                    clearTimeout(abort);
                 }
+            }
+
+            async connectToServer() {
+                clearTimeout(this.reconnectTimer);
+                this.manualDisconnect = false;
+                this.isAuthenticated = false;
+
+                if (this.ws) {
+                    const old = this.ws;
+                    this.ws = null;
+                    old.onopen = old.onmessage = old.onclose = old.onerror = null;
+                    try { old.close(); } catch (_) {}
+                }
+
+                if (location.protocol === 'https:' && this.serverUrl.startsWith('ws://') && !/localhost|127\.0\.0\.1/.test(this.serverUrl)) {
+                    this.serverUrl = this.serverUrl.replace(/^ws:/, 'wss:');
+                    this.els.serverUrl.value = this.serverUrl;
+                }
+                if (location.protocol === 'https:' && this.serverUrl.startsWith('ws://')) {
+                    this.log('This page is on HTTPS, so the browser blocks insecure ws:// connections. Use your deployed wss:// relay URL, or open dj.html locally for localhost testing.', 'error');
+                    this.setStatus('disconnected', 'Disconnected');
+                    return;
+                }
+
+                this.setStatus('connecting', 'Connecting...');
+                this.log(`Connecting to ${this.serverUrl} ...`, 'info');
+
+                const awake = await this.wakeServer();
+                if (this.manualDisconnect) return;
+                if (!awake) {
+                    this.log(`Relay server is not reachable at ${relayHttpBase(this.serverUrl)}. Check the URL and that the server is deployed.`, 'error');
+                    this.setStatus('disconnected', 'Server unreachable');
+                    this.scheduleReconnect();
+                    return;
+                }
+
+                let ws;
+                try {
+                    ws = new WebSocket(this.serverUrl);
+                } catch (err) {
+                    this.log('Invalid server URL: ' + err.message, 'error');
+                    this.setStatus('disconnected', 'Disconnected');
+                    return;
+                }
+                ws.binaryType = 'arraybuffer';
+                this.ws = ws;
+
+                const openTimeout = setTimeout(() => {
+                    if (ws.readyState === WebSocket.CONNECTING) {
+                        this.log('Connection timed out.', 'error');
+                        ws.close();
+                    }
+                }, 15000);
+
+                ws.onopen = () => {
+                    clearTimeout(openTimeout);
+                    if (ws !== this.ws) return;
+                    this.setStatus('connecting', 'Authenticating...');
+                    this.log('Socket open — authenticating...', 'info');
+                    ws.send(JSON.stringify({ type: 'auth', token: this.authToken, djName: this.djName }));
+                };
+
+                ws.onmessage = (event) => {
+                    if (ws !== this.ws || typeof event.data !== 'string') return;
+                    try {
+                        this.handleServerMessage(JSON.parse(event.data));
+                    } catch (e) {
+                        console.error('Bad server message', e);
+                    }
+                };
+
+                ws.onerror = () => {
+                    if (ws !== this.ws) return;
+                    this.log('WebSocket error (server rejected or network blocked the connection).', 'error');
+                };
+
+                ws.onclose = (event) => {
+                    clearTimeout(openTimeout);
+                    if (ws !== this.ws) return;
+                    const wasAuthenticated = this.isAuthenticated;
+                    this.isAuthenticated = false;
+                    this.setStatus('disconnected', 'Disconnected');
+
+                    if (this.isLive) {
+                        this.resumeAfterReconnect = true;
+                        this.stopBroadcasting(true);
+                        this.log('Connection lost while live — will resume broadcast after reconnecting.', 'error');
+                    }
+
+                    if (event.code === 4003) {
+                        this.log('Wrong DJ password. Log out and log in with the correct password.', 'error');
+                        return; // don't retry with a bad password
+                    }
+                    if (this.manualDisconnect) {
+                        this.log('Disconnected.', 'info');
+                        return;
+                    }
+                    this.log(`Disconnected from server${event.code ? ` (code ${event.code})` : ''}.`, 'warning');
+                    if (wasAuthenticated) this.reconnectAttempts = 0;
+                    this.scheduleReconnect();
+                };
+            }
+
+            scheduleReconnect() {
+                if (this.manualDisconnect) return;
+                this.reconnectAttempts++;
+                if (this.reconnectAttempts > 10) {
+                    this.log('Giving up after 10 attempts. Click "Connect to Server" to retry.', 'error');
+                    return;
+                }
+                const delay = Math.min(30000, 2000 * Math.pow(1.6, this.reconnectAttempts - 1));
+                this.log(`Retrying in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/10)...`, 'info');
+                this.reconnectTimer = setTimeout(() => this.connectToServer(), delay);
+            }
+
+            disconnect() {
+                this.manualDisconnect = true;
+                this.resumeAfterReconnect = false;
+                clearTimeout(this.reconnectTimer);
+                if (this.isLive) this.stopBroadcasting();
+                if (this.ws) this.ws.close(1000, 'DJ disconnected');
+            }
+
+            send(obj) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(obj));
+                    return true;
+                }
+                return false;
             }
 
             handleServerMessage(msg) {
                 switch (msg.type) {
                     case 'auth_ok':
-                        this.log('Authentication successful.', 'success');
+                        this.isAuthenticated = true;
+                        this.reconnectAttempts = 0;
+                        this.setStatus('connected', 'Connected');
+                        this.log('Connected & authenticated. You can GO LIVE now.', 'success');
+                        if (typeof msg.listeners === 'number') this.els.listenerCount.textContent = msg.listeners;
+                        if (this.resumeAfterReconnect) {
+                            this.resumeAfterReconnect = false;
+                            this.log('Resuming broadcast...', 'info');
+                            this.startBroadcasting();
+                        }
                         break;
                     case 'auth_fail':
-                        this.log('Authentication failed! Invalid token.', 'error');
-                        if (this.ws) this.ws.close();
+                        this.log('Authentication failed: ' + (msg.message || 'invalid password'), 'error');
+                        break;
+                    case 'live_ok':
+                        this.log('Server confirmed: you are ON AIR.', 'success');
                         break;
                     case 'listener_count':
                         this.els.listenerCount.textContent = msg.count || 0;
                         break;
                     case 'error':
-                        this.log('Server Error: ' + msg.message, 'error');
+                        this.log('Server: ' + msg.message, 'error');
                         break;
                 }
             }
 
             async startBroadcasting() {
-                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-                    this.log('Cannot go live: Not connected to server.', 'error');
-                    alert('Please connect to the relay server first.');
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.isAuthenticated) {
+                    this.log('Cannot go live: not connected to the relay server yet.', 'error');
+                    alert('Please wait until the status shows "Connected" before going live.');
                     return;
                 }
 
                 try {
                     const deviceId = this.els.micSelect.value;
-                    const constraints = {
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia({
                         audio: {
                             deviceId: deviceId ? { exact: deviceId } : undefined,
                             echoCancellation: this.els.toggleEcho.checked,
                             noiseSuppression: this.els.toggleNoise.checked,
                             autoGainControl: this.els.toggleAgc.checked,
+                            channelCount: 2,
+                            sampleRate: 48000
                         }
-                    };
+                    });
 
-                    this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-
-                    // Setup Audio Context for metering and monitoring
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    if (this.audioContext.state === 'suspended') await this.audioContext.resume();
                     this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
-                    
+
                     this.analyser = this.audioContext.createAnalyser();
                     this.analyser.fftSize = 256;
                     this.source.connect(this.analyser);
 
-                    // Setup monitor
                     this.monitorNode = this.audioContext.createGain();
                     this.monitorNode.gain.value = 1.0;
                     this.source.connect(this.monitorNode);
-                    if (this.els.monitorToggle.checked) {
-                        this.monitorNode.connect(this.audioContext.destination);
-                    }
+                    if (this.els.monitorToggle.checked) this.monitorNode.connect(this.audioContext.destination);
 
-                    // Setup MediaRecorder
                     const audioBps = parseInt(this.els.quality.value, 10);
                     const options = { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: audioBps };
-                    
                     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                        this.log('audio/webm;codecs=opus not supported, using default.', 'warning');
-                        delete options.mimeType;
+                        this.log('Your browser cannot encode WebM/Opus. Please use Chrome, Edge or Firefox to broadcast.', 'error');
+                        this.cleanupMedia();
+                        return;
                     }
 
-                    this.mediaRecorder = new MediaRecorder(this.mediaStream, options);
+                    // Tell the server first so it treats the very first chunk as the stream header
+                    this.send({ type: 'start', showTitle: this.els.showTitle.value || 'Live DJ Set', djName: this.djName });
 
+                    this.mediaRecorder = new MediaRecorder(this.mediaStream, options);
                     this.mediaRecorder.ondataavailable = (e) => {
                         if (e.data.size > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
-                            this.ws.send(e.data); // send binary chunk
+                            if (this.ws.bufferedAmount > 2 * 1024 * 1024) {
+                                this.log('Upload is slower than the audio bitrate — lower the Audio Quality.', 'warning');
+                            }
+                            this.ws.send(e.data);
                         }
                     };
+                    this.mediaRecorder.onerror = (e) => this.log('Recorder error: ' + (e.error?.message || 'unknown'), 'error');
+                    this.mediaRecorder.start(250);
 
-                    this.mediaRecorder.start(250); // 250ms chunks
-
-                    // Notify server
-                    this.ws.send(JSON.stringify({
-                        type: 'start',
-                        showTitle: this.els.showTitle.value || 'Live DJ Set',
-                        djName: this.djName
-                    }));
-
-                    // Update UI & State
                     this.isLive = true;
                     this.broadcastStartTime = new Date();
-                    
                     this.els.goLiveBtn.classList.add('live');
                     this.els.goLiveText.textContent = 'STOP';
-                    
-                    // Disable settings while live
-                    this.els.micSelect.disabled = true;
-                    this.els.quality.disabled = true;
-                    this.els.toggleEcho.disabled = true;
-                    this.els.toggleNoise.disabled = true;
-                    this.els.toggleAgc.disabled = true;
+                    this.setSettingsDisabled(true);
 
-                    // Start loops
                     this.updateLevelMeter();
+                    clearInterval(this.timerInterval);
                     this.timerInterval = setInterval(() => this.updateTimer(), 1000);
                     this.updateTimer();
 
-                    this.log('BROADCAST STARTED.', 'success');
-
+                    this.log('BROADCAST STARTED — you are live to the world!', 'success');
                 } catch (err) {
                     this.log('Failed to start broadcast: ' + err.message, 'error');
-                    console.error(err);
+                    this.cleanupMedia();
                 }
             }
 
-            stopBroadcasting() {
+            cleanupMedia() {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                    try { this.mediaRecorder.stop(); } catch (_) {}
+                }
+                this.mediaRecorder = null;
+                if (this.mediaStream) this.mediaStream.getTracks().forEach(t => t.stop());
+                this.mediaStream = null;
+                if (this.audioContext && this.audioContext.state !== 'closed') this.audioContext.close();
+                this.audioContext = null;
+                this.analyser = null;
+                this.monitorNode = null;
+            }
+
+            stopBroadcasting(silent = false) {
                 if (!this.isLive) return;
 
-                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                    this.mediaRecorder.stop();
-                }
+                this.cleanupMedia();
+                this.send({ type: 'stop' });
 
-                if (this.mediaStream) {
-                    this.mediaStream.getTracks().forEach(track => track.stop());
-                }
-
-                if (this.audioContext) {
-                    this.audioContext.close();
-                }
-
-                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({ type: 'stop' }));
-                }
-
-                // Reset state
                 this.isLive = false;
                 clearInterval(this.timerInterval);
                 cancelAnimationFrame(this.animationFrameId);
                 this.els.levelMeter.style.width = '0%';
-                
-                // Update UI
+
                 this.els.goLiveBtn.classList.remove('live');
                 this.els.goLiveText.textContent = 'GO LIVE';
-                
-                this.els.micSelect.disabled = false;
-                this.els.quality.disabled = false;
-                this.els.toggleEcho.disabled = false;
-                this.els.toggleNoise.disabled = false;
-                this.els.toggleAgc.disabled = false;
+                this.setSettingsDisabled(false);
 
-                this.log('Broadcast stopped.', 'warning');
+                if (!silent) this.log('Broadcast stopped.', 'warning');
+            }
+
+            setSettingsDisabled(disabled) {
+                ['micSelect', 'quality', 'toggleEcho', 'toggleNoise', 'toggleAgc'].forEach(k => this.els[k].disabled = disabled);
             }
 
             updateLevelMeter() {
                 if (!this.isLive || !this.analyser) return;
-
-                const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-                this.analyser.getByteFrequencyData(dataArray);
-
+                const data = new Uint8Array(this.analyser.frequencyBinCount);
+                this.analyser.getByteFrequencyData(data);
                 let sum = 0;
-                for(let i = 0; i < dataArray.length; i++) {
-                    sum += dataArray[i];
-                }
-                const average = sum / dataArray.length;
-                
-                // map 0-255 to 0-100%
-                const width = Math.min(100, Math.max(0, (average / 255) * 100 * 1.5)); 
-                
+                for (let i = 0; i < data.length; i++) sum += data[i];
+                const width = Math.min(100, (sum / data.length / 255) * 150);
                 this.els.levelMeter.style.width = `${width}%`;
-
                 this.animationFrameId = requestAnimationFrame(() => this.updateLevelMeter());
             }
 
             updateTimer() {
-                const now = new Date();
-                const diff = Math.floor((now - this.broadcastStartTime) / 1000);
-                
-                const h = Math.floor(diff / 3600).toString().padStart(2, '0');
-                const m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
-                const s = (diff % 60).toString().padStart(2, '0');
-                
+                const diff = Math.floor((Date.now() - this.broadcastStartTime) / 1000);
+                const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+                const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+                const s = String(diff % 60).padStart(2, '0');
                 this.els.timer.textContent = `${h}:${m}:${s}`;
             }
 
             toggleMonitor(enabled) {
                 if (!this.audioContext || !this.monitorNode) return;
-                
-                if (enabled) {
-                    this.monitorNode.connect(this.audioContext.destination);
-                } else {
-                    this.monitorNode.disconnect();
-                }
+                try {
+                    if (enabled) this.monitorNode.connect(this.audioContext.destination);
+                    else this.monitorNode.disconnect();
+                } catch (_) {}
             }
 
             log(message, type = 'info') {
-                const now = new Date();
-                const timeStr = now.toTimeString().split(' ')[0];
-                
+                const time = new Date().toTimeString().split(' ')[0];
                 const div = document.createElement('div');
                 div.className = `log-msg ${type}`;
-                div.innerHTML = `<span class="log-time">[${timeStr}]</span>${message}`;
-                
+                const t = document.createElement('span');
+                t.className = 'log-time';
+                t.textContent = `[${time}]`;
+                div.appendChild(t);
+                div.appendChild(document.createTextNode(' ' + message));
                 this.els.statusLog.appendChild(div);
+                while (this.els.statusLog.children.length > 200) this.els.statusLog.firstChild.remove();
                 this.els.statusLog.scrollTop = this.els.statusLog.scrollHeight;
             }
         }
 
-        // App Initialization & Login Logic
+        // ---- Login & app bootstrap ----
         const broadcaster = new DJBroadcaster();
-        
+
         const loginForm = document.getElementById('login-form');
         const loginNameInput = document.getElementById('login-name');
         const loginPassInput = document.getElementById('login-password');
@@ -887,53 +1059,37 @@
         const dashboard = document.getElementById('dashboard');
         const btnLogout = document.getElementById('btn-logout');
 
-        // Check session
-        const storedDJ = sessionStorage.getItem('wave_dj_name');
-        const storedToken = sessionStorage.getItem('wave_dj_token');
-        
-        if (storedDJ && storedToken) {
+        function enterDashboard(djName, token) {
             loginGate.style.display = 'none';
             dashboard.style.display = 'flex';
-            broadcaster.init(storedDJ, storedToken);
+            broadcaster.init(djName, token);
         }
 
+        const storedDJ = sessionStorage.getItem('wave_dj_name');
+        const storedToken = sessionStorage.getItem('wave_dj_token');
+        if (storedDJ && storedToken) enterDashboard(storedDJ, storedToken);
+
+        // The password is verified by the relay server (DJ_PASSWORD env var),
+        // so changing it on the server works without editing this page.
         loginForm.addEventListener('submit', (e) => {
             e.preventDefault();
-            
-            const djName = loginNameInput.value.trim();
+            const djName = loginNameInput.value.trim() || 'DJ';
             const pass = loginPassInput.value;
-            
-            // Demo password validation
-            if (pass === 'waveradio2024') {
-                sessionStorage.setItem('wave_dj_name', djName);
-                sessionStorage.setItem('wave_dj_token', pass);
-                
-                loginGate.style.display = 'none';
-                dashboard.style.display = 'flex';
-                
-                broadcaster.init(djName, pass);
-            } else {
-                alert('Invalid password.');
-            }
+            if (!pass) return;
+            sessionStorage.setItem('wave_dj_name', djName);
+            sessionStorage.setItem('wave_dj_token', pass);
+            enterDashboard(djName, pass);
         });
 
         btnLogout.addEventListener('click', () => {
-            if (broadcaster.isLive) {
-                if(!confirm('You are currently live! Are you sure you want to stop broadcasting and logout?')) {
-                    return;
-                }
-                broadcaster.stopBroadcasting();
-            }
-            if (broadcaster.ws) broadcaster.ws.close();
-            
+            if (broadcaster.isLive && !confirm('You are currently live! Stop broadcasting and log out?')) return;
+            broadcaster.disconnect();
             sessionStorage.removeItem('wave_dj_name');
             sessionStorage.removeItem('wave_dj_token');
-            
             dashboard.style.display = 'none';
             loginGate.style.display = 'flex';
             loginPassInput.value = '';
         });
-
     </script>
 </body>
 </html>

@@ -1,3 +1,7 @@
+/**
+ * Wave Radio Relay Server
+ * DJ (WebSocket /ws) ──audio──▶ this server ──HTTP /stream──▶ listeners
+ */
 const http = require('http');
 const WebSocket = require('ws');
 
@@ -6,327 +10,290 @@ const CONFIG = {
   djPassword: process.env.DJ_PASSWORD || 'waveradio2024',
   maxListeners: parseInt(process.env.MAX_LISTENERS || '500', 10),
   streamContentType: 'audio/webm;codecs=opus',
-  corsOrigins: '*',
-  healthCheckInterval: 30000,
-  bufferSize: 10, // number of recent chunks to buffer for new listeners
+  heartbeatInterval: 25000, // keep proxies (Render/Railway/Nginx) from killing idle sockets
+  statsInterval: 5000,      // push listener count to DJ
+  bufferSize: 12,           // recent chunks (~3s at 250ms) for smooth listener joins
 };
 
-// --- State Management ---
+// --- State ---
 let djSocket = null;
 const listeners = new Set();
 let initSegment = null;
 let recentChunks = [];
-let isFirstChunk = true; // Tracks if next chunk is the init segment
+let awaitingInit = true;
 
 const broadcastInfo = {
   isLive: false,
   djName: null,
   showTitle: null,
   startedAt: null,
-  peakListeners: 0
+  peakListeners: 0,
 };
 
-// --- Logging Helper ---
 function log(msg) {
-  const time = new Date().toTimeString().split(' ')[0];
-  console.log(`[${time}] ${msg}`);
+  console.log(`[${new Date().toISOString().substr(11, 8)}] ${msg}`);
 }
 
-function updatePeakListeners() {
-  if (listeners.size > broadcastInfo.peakListeners) {
-    broadcastInfo.peakListeners = listeners.size;
+function sendJSON(ws, obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+function endAllListeners() {
+  for (const res of listeners) {
+    try { res.end(); } catch (_) { /* ignore */ }
   }
+  listeners.clear();
 }
 
-// --- HTTP Server Setup ---
+function resetBroadcast() {
+  broadcastInfo.isLive = false;
+  initSegment = null;
+  recentChunks = [];
+  awaitingInit = true;
+  endAllListeners();
+}
+
+// --- HTTP server ---
 const server = http.createServer((req, res) => {
-  // CORS Headers for all responses
-  res.setHeader('Access-Control-Allow-Origin', CONFIG.corsOrigins);
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // Handle OPTIONS preflight
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'text/plain' });
+    return res.end('Method Not Allowed');
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  
-  if (req.method === 'GET') {
-    switch (url.pathname) {
-      case '/stream':
-        handleStreamRequest(req, res);
-        break;
-      case '/status':
-        handleStatusRequest(req, res);
-        break;
-      case '/health':
-        handleHealthRequest(req, res);
-        break;
-      case '/':
-        handleRootRequest(req, res);
-        break;
-      default:
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
-    }
-  } else {
-    res.writeHead(405, { 'Content-Type': 'text/plain' });
-    res.end('Method Not Allowed');
+  const { pathname } = new URL(req.url, 'http://localhost');
+  switch (pathname) {
+    case '/stream': return handleStream(req, res);
+    case '/status': return handleStatus(req, res);
+    case '/health': return json(res, 200, { status: 'ok', uptime: process.uptime() });
+    case '/':       return handleRoot(req, res);
+    default:
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not Found');
   }
 });
 
-// --- HTTP Route Handlers ---
-function handleStreamRequest(req, res) {
-  if (!broadcastInfo.isLive) {
-    res.writeHead(503, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ error: 'No live broadcast' }));
-  }
+function json(res, code, obj) {
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store' });
+  res.end(JSON.stringify(obj));
+}
 
+function handleStream(req, res) {
+  if (!broadcastInfo.isLive || !initSegment) {
+    return json(res, 503, { error: 'No live broadcast' });
+  }
   if (listeners.size >= CONFIG.maxListeners) {
-    res.writeHead(503, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ error: 'Server capacity reached' }));
+    return json(res, 503, { error: 'Server capacity reached' });
   }
 
   res.writeHead(200, {
     'Content-Type': CONFIG.streamContentType,
-    'Transfer-Encoding': 'chunked',
     'Cache-Control': 'no-cache, no-store',
     'Connection': 'keep-alive',
-    'X-Content-Type-Options': 'nosniff'
+    'X-Content-Type-Options': 'nosniff',
+    'X-Accel-Buffering': 'no', // disable proxy buffering so audio flows immediately
   });
+  if (req.method === 'HEAD') return res.end();
 
-  // Write initialization segment to client if available
-  if (initSegment) {
-    res.write(initSegment);
-  }
-
-  // Write buffered chunks for smooth playback start
-  for (const chunk of recentChunks) {
-    res.write(chunk);
-  }
+  res.write(initSegment);
+  for (const chunk of recentChunks) res.write(chunk);
 
   listeners.add(res);
-  updatePeakListeners();
-  
-  if (listeners.size % 10 === 0 || listeners.size === 1) {
-    log(`Listener joined. Total listeners: ${listeners.size}`);
-  }
+  if (listeners.size > broadcastInfo.peakListeners) broadcastInfo.peakListeners = listeners.size;
+  log(`Listener joined (${listeners.size} total)`);
 
   const cleanup = () => {
-    if (listeners.has(res)) {
-      listeners.delete(res);
-      if (listeners.size % 10 === 0 || listeners.size === 0) {
-        log(`Listener disconnected. Total listeners: ${listeners.size}`);
-      }
-    }
+    if (listeners.delete(res)) log(`Listener left (${listeners.size} total)`);
   };
-
   req.on('close', cleanup);
-  res.on('error', (err) => {
-    // Ignore normal disconnection errors
-    if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') {
-      log(`Listener stream error: ${err.message}`);
-    }
-    cleanup();
-  });
+  res.on('error', cleanup);
 }
 
-function handleStatusRequest(req, res) {
-  res.writeHead(200, {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache'
-  });
-  
-  const status = {
-    isLive: broadcastInfo.isLive,
+function handleStatus(req, res) {
+  json(res, 200, {
+    isLive: broadcastInfo.isLive && !!initSegment,
     djName: broadcastInfo.djName,
     showTitle: broadcastInfo.showTitle,
     listeners: listeners.size,
     startedAt: broadcastInfo.startedAt,
+    peakListeners: broadcastInfo.peakListeners,
     uptime: process.uptime(),
-    peakListeners: broadcastInfo.peakListeners
-  };
-  
-  res.end(JSON.stringify(status));
-}
-
-function handleHealthRequest(req, res) {
-  res.writeHead(200, {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache'
   });
-  res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
 }
 
-function handleRootRequest(req, res) {
-  res.writeHead(200, { 'Content-Type': 'text/html' });
-  res.end(`
-    <!DOCTYPE html>
-    <html>
-    <head><title>Wave Radio Relay Server</title><style>body { font-family: sans-serif; text-align: center; padding: 50px; }</style></head>
-    <body>
-      <h1>Wave Radio Relay Server is running \uD83D\uDFE2</h1>
-      <p>Endpoints: <a href="/status">/status</a> | <a href="/health">/health</a> | <a href="/stream">/stream</a></p>
-    </body>
-    </html>
-  `);
+function handleRoot(req, res) {
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(`<!DOCTYPE html><html><head><title>Wave Radio Relay</title>
+<style>body{font-family:sans-serif;background:#0a0a0f;color:#fff;text-align:center;padding:50px}a{color:#00CEC9}</style></head>
+<body><h1>🟢 Wave Radio Relay Server is running</h1>
+<p>Status: <b>${broadcastInfo.isLive ? 'LIVE — ' + broadcastInfo.djName : 'Off air'}</b> · Listeners: ${listeners.size}</p>
+<p><a href="/status">/status</a> · <a href="/health">/health</a> · <a href="/stream">/stream</a></p>
+<p>DJ WebSocket endpoint: <code>wss://${req.headers.host}/ws</code></p></body></html>`);
 }
 
-// --- WebSocket Server (DJ Connection) ---
-const wss = new WebSocket.Server({ server, path: '/ws' });
+// --- WebSocket server (DJ) ---
+// Accept connections on "/ws" AND "/" so a URL missing the /ws suffix still works.
+const wss = new WebSocket.Server({ noServer: true, maxPayload: 2 * 1024 * 1024 });
+
+server.on('upgrade', (req, socket, head) => {
+  const { pathname } = new URL(req.url, 'http://localhost');
+  if (pathname !== '/ws' && pathname !== '/') {
+    socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+    return socket.destroy();
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+});
 
 wss.on('connection', (ws, req) => {
-  log(`Incoming WebSocket connection from ${req.socket.remoteAddress}`);
-  
-  let isAuthenticated = false;
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  log(`WebSocket connection from ${ip}`);
 
-  ws.on('message', (message) => {
-    // 1. Handle authentication
+  let isAuthenticated = false;
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+
+  // Drop sockets that never authenticate
+  const authTimeout = setTimeout(() => {
     if (!isAuthenticated) {
-      try {
-        const data = JSON.parse(message);
-        if (data.type === 'auth') {
-          if (data.token !== CONFIG.djPassword) {
-            log(`Auth failed for IP: ${req.socket.remoteAddress}`);
-            ws.send(JSON.stringify({ type: 'auth_fail', message: 'Invalid token' }));
-            ws.close();
-            return;
-          }
-          if (djSocket && djSocket.readyState === WebSocket.OPEN) {
-            log(`Auth rejected: Another DJ is broadcasting`);
-            ws.send(JSON.stringify({ type: 'error', message: 'Another DJ is already broadcasting' }));
-            ws.close();
-            return;
-          }
-          
-          isAuthenticated = true;
-          djSocket = ws;
-          broadcastInfo.djName = data.djName || 'Unknown DJ';
-          log(`DJ authenticated: ${broadcastInfo.djName}`);
-          ws.send(JSON.stringify({ type: 'auth_ok' }));
-        } else {
-          ws.send(JSON.stringify({ type: 'error', message: 'First message must be auth' }));
-          ws.close();
-        }
-      } catch (err) {
-        log(`Invalid auth message payload: ${err.message}`);
-        ws.close();
+      sendJSON(ws, { type: 'auth_fail', message: 'Authentication timeout' });
+      ws.close(4001, 'Auth timeout');
+    }
+  }, 10000);
+
+  // NOTE: ws v8 delivers ALL messages as Buffers; `isBinary` distinguishes text from audio.
+  ws.on('message', (data, isBinary) => {
+    // ---- Authentication ----
+    if (!isAuthenticated) {
+      if (isBinary) return ws.close(4002, 'Auth required');
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return ws.close(4002, 'Bad auth payload'); }
+
+      if (msg.type !== 'auth') {
+        sendJSON(ws, { type: 'auth_fail', message: 'First message must be auth' });
+        return ws.close(4002, 'Auth required');
+      }
+      if (msg.token !== CONFIG.djPassword) {
+        log(`Auth failed from ${ip}`);
+        sendJSON(ws, { type: 'auth_fail', message: 'Invalid DJ password' });
+        return ws.close(4003, 'Invalid password');
+      }
+      // Replace a stale/ghost DJ session rather than locking everyone out
+      if (djSocket && djSocket !== ws && djSocket.readyState === WebSocket.OPEN) {
+        log('Replacing previous DJ session');
+        sendJSON(djSocket, { type: 'error', message: 'Another DJ session took over' });
+        djSocket.terminate();
+        resetBroadcast();
+      }
+
+      clearTimeout(authTimeout);
+      isAuthenticated = true;
+      djSocket = ws;
+      broadcastInfo.djName = (msg.djName || 'DJ').toString().slice(0, 50);
+      log(`DJ authenticated: ${broadcastInfo.djName}`);
+      sendJSON(ws, { type: 'auth_ok', listeners: listeners.size });
+      return;
+    }
+
+    // ---- Control messages (text) ----
+    if (!isBinary) {
+      let msg;
+      try { msg = JSON.parse(data.toString()); } catch { return log('Invalid control message'); }
+
+      switch (msg.type) {
+        case 'start':
+          resetBroadcast();
+          broadcastInfo.isLive = true;
+          broadcastInfo.showTitle = (msg.showTitle || 'Live Show').toString().slice(0, 100);
+          broadcastInfo.startedAt = new Date().toISOString();
+          broadcastInfo.peakListeners = 0;
+          log(`Broadcast STARTED: "${broadcastInfo.showTitle}" by ${broadcastInfo.djName}`);
+          sendJSON(ws, { type: 'live_ok' });
+          break;
+        case 'stop':
+          log('Broadcast STOPPED by DJ');
+          resetBroadcast();
+          break;
+        case 'metadata':
+          if (msg.showTitle) broadcastInfo.showTitle = msg.showTitle.toString().slice(0, 100);
+          break;
+        case 'ping':
+          sendJSON(ws, { type: 'pong', t: msg.t });
+          break;
       }
       return;
     }
 
-    // 2. Handle DJ Messages (After Auth)
-    if (typeof message === 'string' || Buffer.isBuffer(message) === false) {
-      // JSON Control Message
-      try {
-        const data = JSON.parse(message);
-        switch (data.type) {
-          case 'start':
-            broadcastInfo.isLive = true;
-            broadcastInfo.showTitle = data.showTitle || 'Live Show';
-            broadcastInfo.startedAt = new Date().toISOString();
-            initSegment = null;
-            recentChunks = [];
-            isFirstChunk = true;
-            log(`Broadcast started: ${broadcastInfo.showTitle} by ${broadcastInfo.djName}`);
-            break;
-          case 'stop':
-            broadcastInfo.isLive = false;
-            initSegment = null;
-            recentChunks = [];
-            log(`Broadcast stopped by DJ.`);
-            // End all listener streams
-            listeners.forEach(res => res.end());
-            listeners.clear();
-            break;
-          case 'metadata':
-            broadcastInfo.showTitle = data.showTitle || broadcastInfo.showTitle;
-            log(`Show title updated to: ${broadcastInfo.showTitle}`);
-            break;
-          default:
-            log(`Unknown message type from DJ: ${data.type}`);
-        }
-      } catch (err) {
-        log(`Invalid control message from DJ: ${err.message}`);
-      }
+    // ---- Audio data (binary) ----
+    if (!broadcastInfo.isLive) return;
+
+    if (awaitingInit) {
+      initSegment = data; // first MediaRecorder chunk contains the WebM header
+      awaitingInit = false;
+      log(`Init segment captured (${data.length} bytes) — stream is now available`);
     } else {
-      // Binary Audio Data
-      if (!broadcastInfo.isLive) return;
+      recentChunks.push(data);
+      if (recentChunks.length > CONFIG.bufferSize) recentChunks.shift();
+    }
 
-      if (isFirstChunk) {
-        initSegment = message;
-        isFirstChunk = false;
-        log('Init segment captured.');
-      } else {
-        recentChunks.push(message);
-        if (recentChunks.length > CONFIG.bufferSize) {
-          recentChunks.shift();
-        }
-      }
-
-      // Broadcast to all listeners
-      for (const res of listeners) {
-        // Write the chunk. If the write fails or the connection is ending, we don't crash, 
-        // the error handler on res will remove the listener.
-        res.write(message, (err) => {
-          if (err) {
-            listeners.delete(res);
-          }
-        });
-      }
+    for (const res of listeners) {
+      if (res.writableEnded || res.destroyed) { listeners.delete(res); continue; }
+      res.write(data);
     }
   });
 
-  ws.on('close', () => {
-    if (isAuthenticated) {
-      log(`DJ disconnected: ${broadcastInfo.djName}`);
+  ws.on('close', (code) => {
+    clearTimeout(authTimeout);
+    if (isAuthenticated && djSocket === ws) {
+      log(`DJ disconnected: ${broadcastInfo.djName} (code ${code})`);
       djSocket = null;
-      broadcastInfo.isLive = false;
-      initSegment = null;
-      recentChunks = [];
-      listeners.forEach(res => res.end());
-      listeners.clear();
+      resetBroadcast();
     }
   });
 
-  ws.on('error', (err) => {
-    log(`WebSocket error: ${err.message}`);
-  });
+  ws.on('error', (err) => log(`WebSocket error: ${err.message}`));
 });
 
-// --- System Error Handling & Shutdown ---
+// Heartbeat: terminate dead sockets, keep live ones open through proxies
+const heartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.isAlive) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (_) { /* ignore */ }
+  }
+}, CONFIG.heartbeatInterval);
+
+// Push listener stats to the DJ
+const stats = setInterval(() => {
+  sendJSON(djSocket, { type: 'listener_count', count: listeners.size, peak: broadcastInfo.peakListeners });
+}, CONFIG.statsInterval);
+
+// --- Process handling ---
 process.on('uncaughtException', (err) => {
-  console.error(`[${new Date().toISOString()}] Uncaught Exception:`, err);
-  // Do not crash the server on socket errors
-  if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') {
-    process.exit(1);
-  }
+  log(`Uncaught exception: ${err.stack || err.message}`);
+  if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') process.exit(1);
 });
 
-const gracefulShutdown = (signal) => {
-  log(`Received ${signal}. Shutting down gracefully...`);
-  listeners.forEach(res => res.end());
-  listeners.clear();
-  if (djSocket) {
-    djSocket.close();
-  }
-  server.close(() => {
-    log('Server closed.');
-    process.exit(0);
-  });
-};
+function shutdown(signal) {
+  log(`${signal} received — shutting down`);
+  clearInterval(heartbeat);
+  clearInterval(stats);
+  endAllListeners();
+  for (const ws of wss.clients) ws.terminate();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// --- Startup ---
-server.listen(CONFIG.port, () => {
+server.listen(CONFIG.port, '0.0.0.0', () => {
   console.log('='.repeat(50));
-  console.log(`\uD83D\uDFE2 Wave Radio Relay Server running on port ${CONFIG.port}`);
-  console.log(`- Max Listeners: ${CONFIG.maxListeners}`);
-  console.log(`- Buffer Size:   ${CONFIG.bufferSize} chunks`);
+  console.log(`🟢 Wave Radio Relay Server on port ${CONFIG.port}`);
+  console.log(`   DJ WebSocket : ws://localhost:${CONFIG.port}/ws`);
+  console.log(`   Listen stream: http://localhost:${CONFIG.port}/stream`);
+  console.log(`   Max listeners: ${CONFIG.maxListeners}`);
   console.log('='.repeat(50));
 });
