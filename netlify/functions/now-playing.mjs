@@ -1,31 +1,11 @@
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS'
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Cache-Control': 'no-cache, no-store'
 };
 
-const tracks = [
-  { title: "Last Last", artist: "Burna Boy", album: "Love, Damini", duration: 172 },
-  { title: "Essence", artist: "Wizkid, Tems", album: "Made In Lagos", duration: 248 },
-  { title: "Soweto", artist: "Victony, Tempoe", album: "Outlaw", duration: 147 },
-  { title: "Calm Down", artist: "Rema", album: "Rave & Roses", duration: 239 },
-  { title: "Rush", artist: "Ayra Starr", album: "19 & Dangerous", duration: 185 },
-  { title: "Amapiano", artist: "Asake, Olamide", album: "Work Of Art", duration: 167 },
-  { title: "Rich Flex", artist: "Drake, 21 Savage", album: "Her Loss", duration: 239 },
-  { title: "N95", artist: "Kendrick Lamar", album: "Mr. Morale & The Big Steppers", duration: 195 },
-  { title: "CUFF IT", artist: "Beyoncé", album: "RENAISSANCE", duration: 225 },
-  { title: "Unavailable", artist: "Davido, Musa Keys", album: "Timeless", duration: 170 },
-  { title: "Kwaku the Traveller", artist: "Black Sherif", album: "The Villain I Never Was", duration: 185 },
-  { title: "Non Living Thing", artist: "Sarkodie, Oxlade", album: "No Pressure", duration: 226 },
-  { title: "Into the Future", artist: "Stonebwoy", album: "5th Dimension", duration: 196 },
-  { title: "My Level", artist: "Shatta Wale", album: "Wonder Boy", duration: 181 },
-  { title: "SAD GIRLZ LUV MONEY", artist: "Amaarae, Kali Uchis", album: "The Angel You Don't Know", duration: 204 },
-  { title: "Finesse", artist: "Pheelz, BNXN", album: "Finesse", duration: 154 },
-  { title: "Sinner", artist: "Adekunle Gold", album: "Catch Me If You Can", duration: 176 },
-  { title: "Buga", artist: "Kizz Daniel, Tekno", album: "Maverick", duration: 184 },
-  { title: "Dior", artist: "Ruger", album: "The Second Wave", duration: 194 },
-  { title: "Peru", artist: "Fireboy DML", album: "Playboy", duration: 187 }
-];
+const RELAY_STATUS_URL = process.env.RELAY_STATUS_URL || 'https://wave-radio-relay.onrender.com/status';
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -41,32 +21,62 @@ export const handler = async (event) => {
   }
 
   try {
-    const now = new Date();
-    // Rotate every 3 minutes (180000 ms)
-    const seed = Math.floor(now.getTime() / 180000);
-    const index = seed % tracks.length;
-    const track = tracks[index];
-    
-    // Calculate startedAt
-    const cycleStart = new Date(seed * 180000);
+    // Check if live DJ broadcast is active on the relay server
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
 
+    let liveData = null;
+    try {
+      const response = await fetch(RELAY_STATUS_URL, {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      if (response.ok) {
+        liveData = await response.json();
+      }
+    } catch (_) {
+      // Relay server might be offline or sleeping
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (liveData && liveData.isLive) {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          isLive: true,
+          title: liveData.trackTitle || liveData.showTitle || 'Live DJ Show',
+          artist: liveData.trackArtist ? `${liveData.trackArtist} (Live with ${liveData.djName || 'DJ'})` : `Live with ${liveData.djName || 'DJ'}`,
+          djName: liveData.djName || 'DJ',
+          showTitle: liveData.showTitle || 'Live Show',
+          startedAt: liveData.startedAt || new Date().toISOString(),
+          listeners: liveData.listeners || 0
+        })
+      };
+    }
+
+    // Default off-air state - all fake default tracks removed
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
-        title: track.title,
-        artist: track.artist,
-        album: track.album,
-        artwork: `https://picsum.photos/seed/${encodeURIComponent(track.title)}/300/300`,
-        startedAt: cycleStart.toISOString(),
-        duration: track.duration
+        isLive: false,
+        title: 'Wave Radio',
+        artist: 'Station Library / Ready for Broadcast',
+        startedAt: new Date().toISOString()
       })
     };
   } catch (error) {
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers,
-      body: JSON.stringify({ error: 'Internal Server Error' })
+      body: JSON.stringify({
+        isLive: false,
+        title: 'Wave Radio',
+        artist: 'Feel The Frequency',
+        startedAt: new Date().toISOString()
+      })
     };
   }
 };

@@ -26,6 +26,8 @@ const broadcastInfo = {
   isLive: false,
   djName: null,
   showTitle: null,
+  trackTitle: null,
+  trackArtist: null,
   startedAt: null,
   peakListeners: 0,
 };
@@ -47,6 +49,8 @@ function endAllListeners() {
 
 function resetBroadcast() {
   broadcastInfo.isLive = false;
+  broadcastInfo.trackTitle = null;
+  broadcastInfo.trackArtist = null;
   initSegment = null;
   recentChunks = [];
   awaitingInit = true;
@@ -118,6 +122,8 @@ function handleStatus(req, res) {
     isLive: broadcastInfo.isLive && !!initSegment,
     djName: broadcastInfo.djName,
     showTitle: broadcastInfo.showTitle,
+    trackTitle: broadcastInfo.trackTitle || broadcastInfo.showTitle,
+    trackArtist: broadcastInfo.trackArtist || broadcastInfo.djName,
     listeners: listeners.size,
     startedAt: broadcastInfo.startedAt,
     peakListeners: broadcastInfo.peakListeners,
@@ -208,9 +214,11 @@ wss.on('connection', (ws, req) => {
           resetBroadcast();
           broadcastInfo.isLive = true;
           broadcastInfo.showTitle = (msg.showTitle || 'Live Show').toString().slice(0, 100);
+          if (msg.trackTitle) broadcastInfo.trackTitle = msg.trackTitle.toString().slice(0, 100);
+          if (msg.trackArtist) broadcastInfo.trackArtist = msg.trackArtist.toString().slice(0, 100);
           broadcastInfo.startedAt = new Date().toISOString();
           broadcastInfo.peakListeners = 0;
-          log(`Broadcast STARTED: "${broadcastInfo.showTitle}" by ${broadcastInfo.djName}`);
+          log(`Broadcast STARTED: "${broadcastInfo.showTitle}" by ${broadcastInfo.djName}${broadcastInfo.trackTitle ? ` [Track: ${broadcastInfo.trackTitle}]` : ''}`);
           sendJSON(ws, { type: 'live_ok' });
           break;
         case 'stop':
@@ -218,7 +226,10 @@ wss.on('connection', (ws, req) => {
           resetBroadcast();
           break;
         case 'metadata':
-          if (msg.showTitle) broadcastInfo.showTitle = msg.showTitle.toString().slice(0, 100);
+          if (msg.showTitle !== undefined) broadcastInfo.showTitle = msg.showTitle ? msg.showTitle.toString().slice(0, 100) : 'Live Show';
+          if (msg.trackTitle !== undefined) broadcastInfo.trackTitle = msg.trackTitle ? msg.trackTitle.toString().slice(0, 100) : null;
+          if (msg.trackArtist !== undefined) broadcastInfo.trackArtist = msg.trackArtist ? msg.trackArtist.toString().slice(0, 100) : null;
+          log(`Metadata updated: ${broadcastInfo.trackTitle || broadcastInfo.showTitle} - ${broadcastInfo.trackArtist || broadcastInfo.djName}`);
           break;
         case 'ping':
           sendJSON(ws, { type: 'pong', t: msg.t });

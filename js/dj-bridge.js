@@ -90,12 +90,18 @@ class DJBridge {
         }
       }
 
-      // Update show title if live
-      if (data.isLive && data.showTitle) {
+      // Update show title and current playing track if live
+      if (data.isLive) {
         const titleEl = document.getElementById('now-playing-title');
         const artistEl = document.getElementById('now-playing-artist');
-        if (titleEl) titleEl.textContent = data.showTitle;
-        if (artistEl) artistEl.textContent = `Live with ${data.djName || 'DJ'}`;
+        if (titleEl) {
+          titleEl.textContent = data.trackTitle || data.showTitle || 'Live Broadcast';
+        }
+        if (artistEl) {
+          artistEl.textContent = data.trackArtist 
+            ? `${data.trackArtist} (Live with ${data.djName || 'DJ'})` 
+            : `Live with ${data.djName || 'DJ'}`;
+        }
       }
     } catch (e) {
       // Server not reachable, that's okay
@@ -104,23 +110,30 @@ class DJBridge {
   }
 
   switchToLive() {
-    if (window.radioPlayer && window.radioPlayer.audio) {
+    if (window.radioPlayer) {
       const liveStreamUrl = `${this.relayUrl}/stream`;
-      const wasPlaying = !window.radioPlayer.audio.paused;
-      window.radioPlayer.audio.src = liveStreamUrl;
-      window.radioPlayer.audio.load();
-      if (wasPlaying) {
-        window.radioPlayer.audio.play().catch(e => console.warn('Auto-play blocked', e));
+      if (typeof window.radioPlayer.handleLiveStarted === 'function') {
+        window.radioPlayer.handleLiveStarted(liveStreamUrl);
+      } else if (window.radioPlayer.audio) {
+        const wasPlaying = !window.radioPlayer.audio.paused;
+        window.radioPlayer.audio.src = liveStreamUrl;
+        window.radioPlayer.audio.load();
+        if (wasPlaying) {
+          window.radioPlayer.audio.play().catch(e => console.warn('Auto-play blocked', e));
+        }
       }
     }
   }
 
   switchToDefault() {
     if (window.radioPlayer) {
-      window.radioPlayer.currentStreamIndex = 0;
-      window.radioPlayer.setStreamSource();
-      if (window.radioPlayer.isPlaying) {
-        window.radioPlayer.audio.play().catch(e => console.warn('Auto-play blocked', e));
+      if (typeof window.radioPlayer.handleLiveEnded === 'function') {
+        window.radioPlayer.handleLiveEnded();
+      } else {
+        window.radioPlayer.setStreamSource();
+        if (window.radioPlayer.isPlaying) {
+          window.radioPlayer.audio.play().catch(e => console.warn('Auto-play blocked', e));
+        }
       }
     }
   }

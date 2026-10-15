@@ -1,21 +1,20 @@
 /**
  * Wave Radio - Main Application Script
  * Vanilla JS, no frameworks.
+ * Supports:
+ * - Station Music Library with local upload & IndexedDB persistence
+ * - Seamless Live DJ broadcast takeover & automatic return
+ * - Audio visualizer, track scrubber, and media controls
  */
 
 const CONFIG = {
-  // Stream URLs - configure these with your streaming server
-  streams: [
-    { url: 'https://stream.zeno.fm/yn65fsaurfhvv', format: 'mp3', quality: 'high', label: 'Main Stream' },
-    { url: 'https://stream.zeno.fm/yn65fsaurfhvv', format: 'mp3', quality: 'medium', label: 'Backup Stream' },
-  ],
+  stationName: 'Wave Radio',
   defaultVolume: 0.7,
   reconnectDelay: 3000,
   maxReconnectAttempts: 10,
-  metadataInterval: 10000, // poll every 10s
+  metadataInterval: 8000, // poll every 8s
   listenerCountInterval: 15000,
   visualizerEnabled: true,
-  stationName: 'Wave Radio',
 };
 
 // Utilities
@@ -33,7 +32,6 @@ const debounce = (func, wait) => {
 
 const fetchWithTimeout = async (resource, options = {}) => {
   const { timeout = 8000 } = options;
-  
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   
@@ -45,23 +43,379 @@ const fetchWithTimeout = async (resource, options = {}) => {
   return response;
 };
 
+function escapeHTML(str) {
+  if (!str) return '';
+  return str.replace(/[&<>'"]/g, 
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+  );
+}
+
+function formatTime(seconds) {
+  if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+/**
+ * Station Music Library
+ * Manages uploaded audio tracks in browser IndexedDB
+ */
+class StationLibrary {
+  constructor(player) {
+    this.player = player;
+    this.dbName = 'WaveRadioStationDB';
+    this.dbVersion = 1;
+    this.storeName = 'station_tracks';
+    this.db = null;
+    this.tracks = [];
+    
+    // DOM Elements
+    this.modal = document.getElementById('library-modal');
+    this.openBtn = document.getElementById('btn-open-library');
+    this.closeBtn = document.getElementById('btn-close-library');
+    this.dropzone = document.getElementById('upload-dropzone');
+    this.fileInput = document.getElementById('station-file-input');
+    this.tracksList = document.getElementById('library-tracks-list');
+    this.statusText = document.getElementById('library-status-text');
+    this.badge = document.getElementById('library-count-badge');
+    this.clearBtn = document.getElementById('btn-clear-library');
+    this.shuffleBtn = document.getElementById('btn-shuffle-library');
+    
+    this.init();
+  }
+
+  async init() {
+    this.setupUIListeners();
+    await this.openDB();
+    await this.loadTracks();
+  }
+
+  openDB() {
+    return new Promise((resolve) => {
+      if (!window.indexedDB) {
+        console.warn('IndexedDB not supported, falling back to memory');
+        resolve(null);
+        return;
+      }
+      try {
+        const req = indexedDB.open(this.dbName, this.dbVersion);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            db.createObjectStore(this.storeName, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = (e) => {
+          this.db = e.target.result;
+          resolve(this.db);
+        };
+        req.onerror = () => resolve(null);
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  setupUIListeners() {
+    if (this.openBtn) {
+      this.openBtn.addEventListener('click', () => this.openModal());
+    }
+    if (this.closeBtn) {
+      this.closeBtn.addEventListener('click', () => this.closeModal());
+    }
+    if (this.modal) {
+      this.modal.addEventListener('click', (e) => {
+        if (e.target === this.modal) this.closeModal();
+      });
+    }
+
+    if (this.fileInput) {
+      this.fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          this.handleFiles(e.target.files);
+          this.fileInput.value = '';
+        }
+      });
+    }
+
+    if (this.dropzone) {
+      ['dragenter', 'dragover'].forEach(name => {
+        this.dropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.dropzone.classList.add('dragover');
+        });
+      });
+      ['dragleave', 'drop'].forEach(name => {
+        this.dropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.dropzone.classList.remove('dragover');
+        });
+      });
+      this.dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) {
+          this.handleFiles(dt.files);
+        }
+      });
+    }
+
+    if (this.clearBtn) {
+      this.clearBtn.addEventListener('click', () => {
+        if (this.tracks.length === 0) return;
+        if (confirm('Clear all uploaded station tracks?')) {
+          this.clearAll();
+        }
+      });
+    }
+
+    if (this.shuffleBtn) {
+      this.shuffleBtn.addEventListener('click', () => {
+        if (this.tracks.length > 1) {
+          this.shuffleTracks();
+          window.uiManager?.showToast('Station tracks shuffled!', 'info', 2500);
+        }
+      });
+    }
+  }
+
+  openModal() {
+    if (this.modal) this.modal.style.display = 'flex';
+  }
+
+  closeModal() {
+    if (this.modal) this.modal.style.display = 'none';
+  }
+
+  parseTrackName(fileName) {
+    let clean = fileName.replace(/\.[^/.]+$/, '');
+    clean = clean.replace(/^[0-9]+[\s._-]+/, '');
+    
+    let artist = 'Station Music';
+    let title = clean;
+    
+    if (clean.includes(' - ')) {
+      const parts = clean.split(' - ');
+      artist = parts[0].trim();
+      title = parts.slice(1).join(' - ').trim();
+    }
+    
+    return { title, artist };
+  }
+
+  async handleFiles(fileList) {
+    const audioFiles = Array.from(fileList).filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
+    
+    if (audioFiles.length === 0) {
+      window.uiManager?.showToast('Please select audio files (.mp3, .wav, .m4a, etc.)', 'warning');
+      return;
+    }
+
+    let addedCount = 0;
+    for (const file of audioFiles) {
+      const { title, artist } = this.parseTrackName(file.name);
+      const track = {
+        id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+        title,
+        artist,
+        name: file.name,
+        size: file.size,
+        blob: file,
+        dateAdded: Date.now()
+      };
+      await this.saveTrackToDB(track);
+      this.tracks.push(track);
+      addedCount++;
+    }
+
+    this.renderTrackList();
+    this.updateBadge();
+    window.uiManager?.showToast(`Added ${addedCount} song(s) to station library!`, 'success', 3000);
+
+    if (this.player && this.player.currentTrackIndex === -1 && this.tracks.length > 0 && !this.player.isLive) {
+      this.player.loadTrack(0, false);
+    }
+  }
+
+  saveTrackToDB(track) {
+    if (!this.db) return Promise.resolve();
+    return new Promise((resolve) => {
+      try {
+        const tx = this.db.transaction(this.storeName, 'readwrite');
+        tx.objectStore(this.storeName).put(track);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
+
+  loadTracks() {
+    if (!this.db) return Promise.resolve();
+    return new Promise((resolve) => {
+      try {
+        const tx = this.db.transaction(this.storeName, 'readonly');
+        const req = tx.objectStore(this.storeName).getAll();
+        req.onsuccess = () => {
+          this.tracks = req.result || [];
+          this.renderTrackList();
+          this.updateBadge();
+          if (this.tracks.length > 0 && this.player && !this.player.isLive) {
+            this.player.loadTrack(0, false);
+          }
+          resolve();
+        };
+        req.onerror = () => resolve();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
+
+  deleteTrack(id) {
+    if (this.db) {
+      try {
+        const tx = this.db.transaction(this.storeName, 'readwrite');
+        tx.objectStore(this.storeName).delete(id);
+      } catch (_) {}
+    }
+    const idx = this.tracks.findIndex(t => t.id === id);
+    if (idx !== -1) {
+      const wasCurrent = this.player && this.player.currentTrackIndex === idx;
+      this.tracks.splice(idx, 1);
+      this.renderTrackList();
+      this.updateBadge();
+
+      if (wasCurrent && this.player && !this.player.isLive) {
+        if (this.tracks.length > 0) {
+          const nextIdx = idx >= this.tracks.length ? 0 : idx;
+          this.player.loadTrack(nextIdx, this.player.isPlaying);
+        } else {
+          this.player.resetToOffAir();
+        }
+      }
+    }
+  }
+
+  clearAll() {
+    if (this.db) {
+      try {
+        const tx = this.db.transaction(this.storeName, 'readwrite');
+        tx.objectStore(this.storeName).clear();
+      } catch (_) {}
+    }
+    this.tracks = [];
+    this.renderTrackList();
+    this.updateBadge();
+    if (this.player && !this.player.isLive) {
+      this.player.resetToOffAir();
+    }
+    window.uiManager?.showToast('Station library cleared.', 'info');
+  }
+
+  shuffleTracks() {
+    for (let i = this.tracks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.tracks[i], this.tracks[j]] = [this.tracks[j], this.tracks[i]];
+    }
+    this.renderTrackList();
+    if (this.player && this.tracks.length > 0 && !this.player.isLive) {
+      this.player.loadTrack(0, this.player.isPlaying);
+    }
+  }
+
+  updateBadge() {
+    const count = this.tracks.length;
+    if (this.badge) this.badge.textContent = count;
+    if (this.statusText) this.statusText.textContent = `${count} track${count === 1 ? '' : 's'} uploaded`;
+    
+    const prevBtn = document.getElementById('prev-track-btn');
+    const nextBtn = document.getElementById('next-track-btn');
+    const displayStyle = (count > 1 && (!this.player || !this.player.isLive)) ? 'flex' : 'none';
+    if (prevBtn) prevBtn.style.display = displayStyle;
+    if (nextBtn) nextBtn.style.display = displayStyle;
+  }
+
+  renderTrackList() {
+    if (!this.tracksList) return;
+
+    if (this.tracks.length === 0) {
+      this.tracksList.innerHTML = `
+        <div class="empty-library-state">
+            <i class="fas fa-compact-disc"></i>
+            <p>No music uploaded yet.<br>Upload your favorite audio files to build your station's playlist!</p>
+        </div>
+      `;
+      return;
+    }
+
+    this.tracksList.innerHTML = '';
+    this.tracks.forEach((track, index) => {
+      const item = document.createElement('div');
+      item.className = 'track-item' + (this.player && this.player.currentTrackIndex === index ? ' active' : '');
+      item.innerHTML = `
+        <span class="track-index">${index + 1}</span>
+        <div class="track-details">
+            <div class="track-name">${escapeHTML(track.title)}</div>
+            <p class="track-meta">${escapeHTML(track.artist)}</p>
+        </div>
+        <button class="track-remove-btn" title="Remove track" data-id="${track.id}">
+            <i class="fas fa-times"></i>
+        </button>
+      `;
+
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.track-remove-btn')) {
+          e.stopPropagation();
+          this.deleteTrack(track.id);
+          return;
+        }
+        if (this.player) {
+          this.player.loadTrack(index, true);
+          this.closeModal();
+        }
+      });
+
+      this.tracksList.appendChild(item);
+    });
+  }
+}
+
+/**
+ * RadioPlayer Class
+ * Coordinates audio playback for both Live DJ streams and uploaded station tracks
+ */
 class RadioPlayer {
   constructor() {
     this.audio = document.getElementById('radio-stream');
     this.playBtn = document.getElementById('play-btn');
     this.playIcon = this.playBtn ? this.playBtn.querySelector('i') : null;
+    this.prevBtn = document.getElementById('prev-track-btn');
+    this.nextBtn = document.getElementById('next-track-btn');
     this.volumeSlider = document.getElementById('volume-slider');
     this.muteBtn = document.querySelector('.volume-icon');
     this.muteIcon = this.muteBtn || null;
     
+    // Scrubber elements
+    this.scrubber = document.getElementById('track-scrubber');
+    this.progressContainer = document.getElementById('progress-container');
+    this.progressFill = document.getElementById('progress-fill');
+    this.currentTimeEl = document.getElementById('track-current-time');
+    this.totalTimeEl = document.getElementById('track-total-time');
+
     this.canvas = document.getElementById('visualizer-canvas');
     this.canvasCtx = this.canvas ? this.canvas.getContext('2d') : null;
     this.nowPlayingTitle = document.getElementById('now-playing-title');
     this.nowPlayingArtist = document.getElementById('now-playing-artist');
     this.listenerCountDisplay = document.getElementById('listener-count');
-    this.equalizer = document.querySelector('.css-equalizer');
+    this.equalizer = document.querySelector('.equalizer');
     
-    this.currentStreamIndex = 0;
+    this.currentTrackIndex = -1;
+    this.isLive = false;
+    this.activeBlobUrl = null;
     this.reconnectAttempts = 0;
     this.isPlaying = false;
     this.isMuted = false;
@@ -75,8 +429,10 @@ class RadioPlayer {
       listeners: null
     };
     
-    this.currentSong = { title: CONFIG.stationName, artist: 'Live' };
+    this.currentSong = { title: CONFIG.stationName, artist: 'Feel The Frequency' };
     
+    // Initialize station library
+    this.library = new StationLibrary(this);
     this.init();
   }
 
@@ -86,7 +442,6 @@ class RadioPlayer {
     this.audio.volume = CONFIG.defaultVolume;
     if (this.volumeSlider) this.volumeSlider.value = Math.round(CONFIG.defaultVolume * 100);
     
-    this.setStreamSource();
     this.setupEventListeners();
     this.setupMediaSession();
     this.startPolling();
@@ -99,19 +454,17 @@ class RadioPlayer {
     }
   }
 
-  setStreamSource() {
-    if (!CONFIG.streams || CONFIG.streams.length === 0) {
-      console.warn('No stream URLs configured.');
-      return;
-    }
-    const stream = CONFIG.streams[this.currentStreamIndex];
-    this.audio.src = stream.url;
-    this.audio.load();
-  }
-
   setupEventListeners() {
     if (this.playBtn) {
       this.playBtn.addEventListener('click', () => this.togglePlay());
+    }
+
+    if (this.prevBtn) {
+      this.prevBtn.addEventListener('click', () => this.playPrevTrack());
+    }
+
+    if (this.nextBtn) {
+      this.nextBtn.addEventListener('click', () => this.playNextTrack());
     }
     
     if (this.volumeSlider) {
@@ -120,6 +473,10 @@ class RadioPlayer {
     
     if (this.muteBtn) {
       this.muteBtn.addEventListener('click', () => this.toggleMute());
+    }
+
+    if (this.progressContainer) {
+      this.progressContainer.addEventListener('click', (e) => this.seekAudio(e));
     }
     
     // Audio Events
@@ -130,22 +487,139 @@ class RadioPlayer {
     this.audio.addEventListener('waiting', () => this.handleWaiting());
     this.audio.addEventListener('canplay', () => this.handleCanPlay());
     this.audio.addEventListener('stalled', () => this.handleStalled());
+    this.audio.addEventListener('timeupdate', () => this.updateScrubber());
+    this.audio.addEventListener('loadedmetadata', () => this.updateScrubber());
+  }
+
+  loadTrack(index, autoPlay = true) {
+    if (!this.library || !this.library.tracks || index < 0 || index >= this.library.tracks.length) return;
+    
+    if (this.activeBlobUrl) {
+      try { URL.revokeObjectURL(this.activeBlobUrl); } catch (_) {}
+    }
+
+    this.currentTrackIndex = index;
+    const track = this.library.tracks[index];
+    this.activeBlobUrl = URL.createObjectURL(track.blob);
+    this.audio.src = this.activeBlobUrl;
+    this.audio.load();
+
+    this.currentSong = { title: track.title, artist: track.artist };
+    this.updateMetadataUI();
+
+    if (this.scrubber) this.scrubber.style.display = 'flex';
+    this.library.renderTrackList();
+    this.library.updateBadge();
+
+    if (autoPlay) {
+      this.audio.play().catch(e => console.warn('Playback error:', e));
+    }
+  }
+
+  playNextTrack() {
+    if (this.isLive || !this.library || this.library.tracks.length === 0) return;
+    const nextIdx = (this.currentTrackIndex + 1) % this.library.tracks.length;
+    this.loadTrack(nextIdx, true);
+  }
+
+  playPrevTrack() {
+    if (this.isLive || !this.library || this.library.tracks.length === 0) return;
+    const prevIdx = (this.currentTrackIndex - 1 + this.library.tracks.length) % this.library.tracks.length;
+    this.loadTrack(prevIdx, true);
+  }
+
+  resetToOffAir() {
+    this.audio.pause();
+    this.audio.src = '';
+    this.currentTrackIndex = -1;
+    this.currentSong = { title: CONFIG.stationName, artist: 'Station Ready - Upload Your Music' };
+    this.updateMetadataUI();
+    if (this.scrubber) this.scrubber.style.display = 'none';
+    if (this.prevBtn) this.prevBtn.style.display = 'none';
+    if (this.nextBtn) this.nextBtn.style.display = 'none';
+    this.setUIState('paused');
+  }
+
+  seekAudio(e) {
+    if (this.isLive || !this.audio.duration || !isFinite(this.audio.duration)) return;
+    const rect = this.progressContainer.getBoundingClientRect();
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    this.audio.currentTime = pos * this.audio.duration;
+  }
+
+  updateScrubber() {
+    if (this.isLive || !this.audio || !this.audio.duration || !isFinite(this.audio.duration)) return;
+    const cur = this.audio.currentTime || 0;
+    const dur = this.audio.duration || 0;
+    const pct = dur > 0 ? (cur / dur) * 100 : 0;
+    
+    if (this.progressFill) this.progressFill.style.width = `${pct}%`;
+    if (this.currentTimeEl) this.currentTimeEl.textContent = formatTime(cur);
+    if (this.totalTimeEl) this.totalTimeEl.textContent = formatTime(dur);
   }
 
   async togglePlay() {
     try {
+      if (this.isLive) {
+        if (this.audio.paused) {
+          if (this.audioContext && this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+          }
+          await this.audio.play();
+        } else {
+          this.audio.pause();
+        }
+        return;
+      }
+
+      // Station music mode
+      if (!this.library || this.library.tracks.length === 0) {
+        this.library.openModal();
+        window.uiManager?.showToast('No music uploaded yet! Upload your audio files to start listening.', 'info', 4000);
+        return;
+      }
+
       if (this.audio.paused) {
-        // Resume context if needed
         if (this.audioContext && this.audioContext.state === 'suspended') {
           await this.audioContext.resume();
         }
-        await this.audio.play();
+        if (!this.audio.src || this.currentTrackIndex === -1) {
+          this.loadTrack(0, true);
+        } else {
+          await this.audio.play();
+        }
       } else {
         this.audio.pause();
       }
     } catch (error) {
       console.error('Playback failed:', error);
-      window.uiManager.showToast('Could not start playback. Please try again.', 'error');
+      window.uiManager?.showToast('Could not start playback. Please try again.', 'error');
+    }
+  }
+
+  handleLiveStarted(liveStreamUrl) {
+    this.isLive = true;
+    const wasPlaying = this.isPlaying;
+    
+    if (this.scrubber) this.scrubber.style.display = 'none';
+    if (this.prevBtn) this.prevBtn.style.display = 'none';
+    if (this.nextBtn) this.nextBtn.style.display = 'none';
+
+    this.audio.src = liveStreamUrl;
+    this.audio.load();
+
+    if (wasPlaying) {
+      this.audio.play().catch(e => console.warn('Auto-play blocked:', e));
+    }
+  }
+
+  handleLiveEnded() {
+    this.isLive = false;
+    if (this.library && this.library.tracks.length > 0) {
+      const idx = this.currentTrackIndex >= 0 ? this.currentTrackIndex : 0;
+      this.loadTrack(idx, this.isPlaying);
+    } else {
+      this.resetToOffAir();
     }
   }
 
@@ -160,7 +634,7 @@ class RadioPlayer {
     this.isMuted = !this.isMuted;
     this.audio.muted = this.isMuted;
     if (this.volumeSlider) {
-      this.volumeSlider.value = this.isMuted ? 0 : this.audio.volume;
+      this.volumeSlider.value = this.isMuted ? 0 : Math.round(this.audio.volume * 100);
     }
     this.updateVolumeUI();
   }
@@ -201,30 +675,31 @@ class RadioPlayer {
   }
 
   handleEnded() {
-    this.handlePause();
-    // Reconnect attempt on unexpected end
-    this.handleError(); 
+    if (this.isLive) {
+      this.handlePause();
+      this.handleError();
+    } else {
+      if (this.library && this.library.tracks.length > 0) {
+        this.playNextTrack();
+      } else {
+        this.handlePause();
+      }
+    }
   }
 
   handleError(e) {
+    if (!this.isLive) return;
     console.error('Audio stream error', e);
     this.setUIState('error');
     if (this.reconnectAttempts < CONFIG.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = CONFIG.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
-      console.log(`Attempting to reconnect in ${delay}ms... (Attempt ${this.reconnectAttempts})`);
-      window.uiManager.showToast(`Connection lost. Reconnecting...`, 'info', delay);
-      
       setTimeout(() => {
-        // Try fallback stream if available on odd attempts to not switch constantly
-        if (this.reconnectAttempts % 2 !== 0 && CONFIG.streams.length > 1) {
-          this.currentStreamIndex = (this.currentStreamIndex + 1) % CONFIG.streams.length;
+        if (this.isLive && this.audio) {
+          this.audio.load();
+          this.audio.play().catch(() => {});
         }
-        this.setStreamSource();
-        this.audio.play().catch(err => console.error('Replay failed', err));
       }, delay);
-    } else {
-      window.uiManager.showToast('Unable to connect to stream. Please try again later.', 'error');
     }
   }
 
@@ -239,7 +714,9 @@ class RadioPlayer {
   }
 
   handleStalled() {
-    this.setUIState('loading');
+    if (this.isLive) {
+      this.setUIState('loading');
+    }
   }
 
   setUIState(state) {
@@ -267,11 +744,12 @@ class RadioPlayer {
     }
   }
 
-  // MediaSession API for OS integration
   setupMediaSession() {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => this.togglePlay());
       navigator.mediaSession.setActionHandler('pause', () => this.togglePlay());
+      navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrevTrack());
+      navigator.mediaSession.setActionHandler('nexttrack', () => this.playNextTrack());
       this.updateMediaSession();
     }
   }
@@ -290,7 +768,6 @@ class RadioPlayer {
     }
   }
 
-  // Visualizer
   initVisualizer() {
     if (!this.canvasCtx || this.audioContext) return;
     
@@ -298,8 +775,6 @@ class RadioPlayer {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.audioContext = new AudioContext();
       this.analyser = this.audioContext.createAnalyser();
-      
-      // Prevent CORS issues on Canvas if source is cross-origin
       this.audio.crossOrigin = "anonymous";
       
       this.source = this.audioContext.createMediaElementSource(this.audio);
@@ -342,9 +817,8 @@ class RadioPlayer {
     let x = 0;
     
     for (let i = 0; i < bufferLength; i++) {
-      barHeight = dataArray[i];
+      barHeight = (dataArray[i] / 255) * this.canvas.height;
       
-      // Gradient from Purple to Teal
       const gradient = this.canvasCtx.createLinearGradient(0, this.canvas.height, 0, 0);
       gradient.addColorStop(0, '#7b2cbf');
       gradient.addColorStop(1, '#00f5d4');
@@ -356,7 +830,6 @@ class RadioPlayer {
     }
   }
 
-  // Metadata and Listeners
   startPolling() {
     this.fetchMetadata();
     this.intervals.metadata = setInterval(() => this.fetchMetadata(), CONFIG.metadataInterval);
@@ -366,23 +839,23 @@ class RadioPlayer {
   }
 
   async fetchMetadata() {
+    // Only poll server metadata if live DJ is broadcasting
+    if (!this.isLive) return;
+
     try {
       const response = await fetchWithTimeout('/.netlify/functions/now-playing', { timeout: 5000 });
-      if (!response.ok) throw new Error('Failed to fetch metadata');
+      if (!response.ok) return;
       const data = await response.json();
       
-      if (data.title !== this.currentSong.title || data.artist !== this.currentSong.artist) {
-        this.currentSong = { title: data.title || CONFIG.stationName, artist: data.artist || 'Live' };
+      if (data.isLive && (data.title !== this.currentSong.title || data.artist !== this.currentSong.artist)) {
+        this.currentSong = { title: data.title || CONFIG.stationName, artist: data.artist || 'Live DJ' };
         this.updateMetadataUI();
       }
-    } catch (error) {
-      // Silent fail, just keep current metadata
-    }
+    } catch (_) {}
   }
 
   updateMetadataUI() {
     if (this.nowPlayingTitle && this.nowPlayingArtist) {
-      // Simple fade out/in animation
       this.nowPlayingTitle.style.opacity = '0';
       this.nowPlayingArtist.style.opacity = '0';
       
@@ -406,9 +879,7 @@ class RadioPlayer {
         body: JSON.stringify({ action, timestamp: new Date().toISOString() }),
         timeout: 5000
       });
-    } catch (e) {
-      // Silently fail analytics
-    }
+    } catch (_) {}
   }
 
   async fetchListenerCount() {
@@ -420,9 +891,7 @@ class RadioPlayer {
           this.listenerCountDisplay.innerHTML = `<i class="fas fa-users"></i> ${data.count.toLocaleString()} Listening`;
         }
       }
-    } catch (e) {
-      // Silently fail
-    }
+    } catch (_) {}
   }
 
   setupUnloadTracking() {

@@ -3,7 +3,7 @@
  * - Network-first for same-origin pages/assets (always get the latest deploy, fall back to cache offline)
  * - Never touches non-GET requests or cross-origin requests (audio streams, relay server, CDNs)
  */
-const CACHE_NAME = 'wave-radio-cache-v2';
+const CACHE_NAME = 'wave-radio-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
