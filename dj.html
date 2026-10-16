@@ -673,6 +673,190 @@
 
         #btn-connect.is-connected { background: rgba(231, 76, 60, 0.85); }
         #btn-connect:disabled { opacity: .6; cursor: wait; }
+
+        /* Hotline Panel Styles */
+        .hotline-idle {
+            text-align: center;
+            padding: 20px 10px;
+            color: var(--text-muted);
+        }
+        .hotline-idle i {
+            font-size: 2.2rem;
+            color: var(--secondary);
+            margin-bottom: 10px;
+            display: block;
+        }
+        .hotline-ringing {
+            background: rgba(231, 76, 60, 0.15);
+            border: 2px solid #e74c3c;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            animation: ringGlow 1s infinite alternate;
+        }
+        @keyframes ringGlow {
+            from { box-shadow: 0 0 5px rgba(231, 76, 60, 0.3); }
+            to { box-shadow: 0 0 20px rgba(231, 76, 60, 0.8); }
+        }
+        .ringing-pulse {
+            width: 55px;
+            height: 55px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            margin-bottom: 10px;
+            animation: phoneShake 0.6s infinite;
+        }
+        @keyframes phoneShake {
+            0%, 100% { transform: rotate(0deg); }
+            20%, 60% { transform: rotate(-15deg); }
+            40%, 80% { transform: rotate(15deg); }
+        }
+        .ringing-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 14px;
+            justify-content: center;
+        }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #2ecc71; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+
+        .hotline-active {
+            background: rgba(26, 26, 46, 0.85);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .active-caller-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .call-timer {
+            font-family: monospace;
+            font-size: 1.1rem;
+            color: var(--secondary);
+            font-weight: bold;
+        }
+        .caller-meter-wrap {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+        #caller-meter-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #2ecc71, #f1c40f, #e74c3c);
+            transition: width 0.05s ease;
+        }
+        .btn-air-mode {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-air-mode.off-air {
+            background: rgba(241, 196, 15, 0.15);
+            border: 2px solid #f1c40f;
+            color: #f1c40f;
+        }
+        .btn-air-mode.off-air:hover {
+            background: rgba(241, 196, 15, 0.25);
+        }
+        .btn-air-mode.on-air {
+            background: rgba(231, 76, 60, 0.9);
+            border: 2px solid #ff7675;
+            color: white;
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.6);
+            animation: onAirPulse 1.5s infinite;
+        }
+        @keyframes onAirPulse {
+            0% { transform: scale(1); box-shadow: 0 0 10px rgba(231,76,60,0.5); }
+            50% { transform: scale(1.02); box-shadow: 0 0 25px rgba(231,76,60,0.9); }
+            100% { transform: scale(1); box-shadow: 0 0 10px rgba(231,76,60,0.5); }
+        }
+        .caller-controls-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+        }
+        .caller-controls-row input[type="range"] {
+            flex: 1;
+            margin: 0;
+        }
+
+        /* DJ Chat Panel */
+        .dj-chat-messages {
+            height: 180px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .dj-chat-msg {
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.05);
+            border-left: 3px solid var(--secondary);
+            word-break: break-word;
+        }
+        .dj-chat-msg.from-dj {
+            background: rgba(108, 92, 231, 0.2);
+            border-left: 3px solid var(--primary);
+        }
+        .dj-chat-msg .chat-meta {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+        }
+        .dj-chat-msg .chat-sender {
+            font-weight: 700;
+            color: var(--secondary);
+        }
+        .dj-chat-msg.from-dj .chat-sender {
+            color: var(--accent);
+        }
+        .chat-reply-bar {
+            display: flex;
+            gap: 8px;
+        }
+        .chat-reply-bar select {
+            width: 36%;
+            margin-bottom: 0;
+            padding: 8px;
+            font-size: 0.82rem;
+        }
+        .chat-reply-bar input {
+            flex: 1;
+            margin-bottom: 0;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -887,6 +1071,73 @@
                     </div>
                 </div>
 
+                <!-- Studio Hotline Panel -->
+                <div class="hotline-panel glass-card" id="studio-hotline-card">
+                    <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0;"><i class="fas fa-phone-volume text-gradient"></i> Studio Hotline</h3>
+                        <span class="badge" id="hotline-badge" style="background:rgba(0,206,201,0.2); color:var(--secondary); padding:4px 8px; border-radius:12px; font-size:0.75rem;">Hotline Ready</span>
+                    </div>
+
+                    <div id="hotline-idle" class="hotline-idle">
+                        <i class="fas fa-headset"></i>
+                        <p style="margin:0 0 4px 0; font-weight:600; color:#fff;">Hotline Open</p>
+                        <p style="font-size:0.82rem; margin:0; line-height:1.4;">Listeners can call from Bethel Radio. When a call arrives, you can talk privately (Off-Air) before putting them live on air.</p>
+                    </div>
+
+                    <div id="hotline-ringing" class="hotline-ringing" style="display: none;">
+                        <div class="ringing-pulse"><i class="fas fa-phone-alt"></i></div>
+                        <div class="ringing-info">
+                            <h4 style="margin:0 0 4px 0; color:#fff;">Incoming Call</h4>
+                            <p id="ringing-caller-name" style="font-size:1.15rem; font-weight:700; color:#00CEC9; margin:0;">Caller Name</p>
+                        </div>
+                        <div class="ringing-actions">
+                            <button id="btn-accept-call" class="btn btn-success"><i class="fas fa-phone"></i> Accept (Off-Air)</button>
+                            <button id="btn-decline-call" class="btn btn-danger"><i class="fas fa-phone-slash"></i> Decline</button>
+                        </div>
+                    </div>
+
+                    <div id="hotline-active" class="hotline-active" style="display: none;">
+                        <div class="active-caller-header">
+                            <span class="caller-name"><i class="fas fa-user-circle"></i> <strong id="active-caller-name" style="color:#00CEC9;">Caller</strong></span>
+                            <span class="call-timer" id="active-call-timer">00:00</span>
+                        </div>
+                        <div class="caller-meter-wrap" title="Caller Audio Level">
+                            <div id="caller-meter-bar"></div>
+                        </div>
+                        <div class="air-toggle-box">
+                            <button id="btn-toggle-air" class="btn-air-mode off-air">
+                                <span id="air-mode-text">🎧 OFF-AIR (PRIVATE) — Click to Put ON-AIR 🔴</span>
+                            </button>
+                        </div>
+                        <div class="caller-controls-row">
+                            <input type="range" id="caller-volume" min="0" max="150" value="100" title="Caller Gain">
+                            <span id="caller-vol-label" style="min-width:38px;">100%</span>
+                            <button id="btn-mute-caller" class="btn btn-sm btn-secondary" title="Mute Caller"><i class="fas fa-microphone"></i></button>
+                            <button id="btn-end-call" class="btn btn-sm btn-danger" title="End Call"><i class="fas fa-phone-slash"></i> Hang Up</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Direct Listener Chat Panel -->
+                <div class="chat-panel glass-card" id="studio-chat-card">
+                    <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h3 style="margin:0;"><i class="fas fa-comments text-gradient"></i> Listener Chat</h3>
+                        <span class="badge" id="chat-users-badge" style="background:rgba(108,92,231,0.2); color:var(--primary-light); padding:4px 8px; border-radius:12px; font-size:0.75rem;">0 Online</span>
+                    </div>
+                    <div class="dj-chat-messages" id="dj-chat-messages">
+                        <div style="color:var(--text-muted); text-align:center; padding:30px 10px;">
+                            No messages yet. Chat messages from listeners will appear here in real time.
+                        </div>
+                    </div>
+                    <div class="chat-reply-bar" style="margin-top:10px;">
+                        <select id="dj-chat-recipient">
+                            <option value="all">📢 All Listeners</option>
+                        </select>
+                        <input type="text" id="dj-chat-text" placeholder="Reply to listener..." maxlength="500">
+                        <button id="btn-dj-chat-send" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+
                 <!-- Server Connection Panel -->
                 <div class="server-panel glass-card">
                     <h3><i class="fas fa-server"></i> Relay Server</h3>
@@ -1032,8 +1283,48 @@
                     btnNext: document.getElementById('btn-dj-next'),
                     btnLoop: document.getElementById('btn-dj-loop'),
                     btnShuffle: document.getElementById('btn-dj-shuffle'),
-                    playlistContainer: document.getElementById('dj-playlist')
+                    playlistContainer: document.getElementById('dj-playlist'),
+                    // Hotline Elements
+                    hotlineBadge: document.getElementById('hotline-badge'),
+                    hotlineIdle: document.getElementById('hotline-idle'),
+                    hotlineRinging: document.getElementById('hotline-ringing'),
+                    hotlineActive: document.getElementById('hotline-active'),
+                    ringingCallerName: document.getElementById('ringing-caller-name'),
+                    btnAcceptCall: document.getElementById('btn-accept-call'),
+                    btnDeclineCall: document.getElementById('btn-decline-call'),
+                    activeCallerName: document.getElementById('active-caller-name'),
+                    activeCallTimer: document.getElementById('active-call-timer'),
+                    callerMeterBar: document.getElementById('caller-meter-bar'),
+                    btnToggleAir: document.getElementById('btn-toggle-air'),
+                    airModeText: document.getElementById('air-mode-text'),
+                    callerVolumeSlider: document.getElementById('caller-volume'),
+                    callerVolLabel: document.getElementById('caller-vol-label'),
+                    btnMuteCaller: document.getElementById('btn-mute-caller'),
+                    btnEndCall: document.getElementById('btn-end-call'),
+                    // DJ Chat Elements
+                    chatUsersBadge: document.getElementById('chat-users-badge'),
+                    djChatMessages: document.getElementById('dj-chat-messages'),
+                    djChatRecipient: document.getElementById('dj-chat-recipient'),
+                    djChatText: document.getElementById('dj-chat-text'),
+                    btnDjChatSend: document.getElementById('btn-dj-chat-send')
                 };
+
+                // Live Studio Hotline State
+                this.peerConnection = null;
+                this.activeCaller = null;
+                this.pendingCallerId = null;
+                this.pendingCallerName = null;
+                this.isCallerOnAir = false;
+                this.isCallerMuted = false;
+                this.callerVolume = 1.0;
+                this.callerSource = null;
+                this.callerGain = null;
+                this.callerMonitorGain = null;
+                this.callerBroadcastGain = null;
+                this.callerAnalyser = null;
+                this.callerAnimFrame = null;
+                this.ringInterval = null;
+                this.knownListeners = new Map();
             }
 
             async init(djName, token) {
@@ -1056,6 +1347,22 @@
 
             setupEventListeners() {
                 this.els.refreshMicsBtn.addEventListener('click', () => this.enumerateDevices());
+
+                // Hotline Listeners
+                if (this.els.btnAcceptCall) this.els.btnAcceptCall.addEventListener('click', () => this.acceptCall());
+                if (this.els.btnDeclineCall) this.els.btnDeclineCall.addEventListener('click', () => this.declineCall());
+                if (this.els.btnToggleAir) this.els.btnToggleAir.addEventListener('click', () => this.toggleCallerAirMode());
+                if (this.els.btnEndCall) this.els.btnEndCall.addEventListener('click', () => this.endCall(true));
+                if (this.els.btnMuteCaller) this.els.btnMuteCaller.addEventListener('click', () => this.toggleCallerMute());
+                if (this.els.callerVolumeSlider) this.els.callerVolumeSlider.addEventListener('input', (e) => this.setCallerVolume(e.target.value));
+
+                // Chat Listeners
+                if (this.els.btnDjChatSend) this.els.btnDjChatSend.addEventListener('click', () => this.sendDJChatMessage());
+                if (this.els.djChatText) {
+                    this.els.djChatText.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') this.sendDJChatMessage();
+                    });
+                }
 
                 this.els.btnConnect.addEventListener('click', () => {
                     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.isAuthenticated) {
@@ -1621,6 +1928,7 @@
                         this.setStatus('connected', 'Connected');
                         this.log('Authenticated successfully! You are ready to GO LIVE.', 'success');
                         if (typeof msg.listeners === 'number') this.els.listenerCount.textContent = msg.listeners;
+                        if (typeof msg.chatUsers === 'number') this.els.chatUsersBadge.textContent = `${msg.chatUsers} Online`;
                         if (this.resumeAfterReconnect) {
                             this.resumeAfterReconnect = false;
                             this.log('Resuming live broadcast...', 'info');
@@ -1635,6 +1943,27 @@
                         break;
                     case 'listener_count':
                         this.els.listenerCount.textContent = msg.count || 0;
+                        break;
+                    case 'chat_message':
+                        this.receiveChatMessage(msg);
+                        break;
+                    case 'chat_user_joined':
+                        this.updateChatUser(msg.listenerId, msg.name, true, msg.onlineCount);
+                        break;
+                    case 'chat_user_left':
+                        this.updateChatUser(msg.listenerId, null, false, msg.onlineCount);
+                        break;
+                    case 'call_incoming':
+                        this.handleIncomingCall(msg.callerId, msg.callerName);
+                        break;
+                    case 'call_cancelled':
+                        this.handleCallCancelled(msg.callerId);
+                        break;
+                    case 'call_ended':
+                        this.handleCallEnded(msg.reason);
+                        break;
+                    case 'webrtc_signal':
+                        this.handleWebRTCSignal(msg.fromId, msg.signal);
                         break;
                     case 'error':
                         this.log('Server Error: ' + msg.message, 'error');
@@ -1848,6 +2177,439 @@
                 this.els.statusLog.appendChild(div);
                 while (this.els.statusLog.children.length > 200) this.els.statusLog.firstChild.remove();
                 this.els.statusLog.scrollTop = this.els.statusLog.scrollHeight;
+            }
+
+            // ========================================================
+            // STUDIO HOTLINE & LIVE CALL SYSTEM
+            // ========================================================
+            playRingtone() {
+                this.stopRingtone();
+                try {
+                    this.initAudioContext();
+                    const playBurst = () => {
+                        if (!this.audioContext || this.audioContext.state === 'closed') return;
+                        const osc1 = this.audioContext.createOscillator();
+                        const osc2 = this.audioContext.createOscillator();
+                        const gain = this.audioContext.createGain();
+
+                        osc1.frequency.value = 440;
+                        osc2.frequency.value = 480;
+                        gain.gain.setValueAtTime(0.08, this.audioContext.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 1.2);
+
+                        osc1.connect(gain);
+                        osc2.connect(gain);
+                        gain.connect(this.audioContext.destination);
+
+                        osc1.start();
+                        osc2.start();
+                        osc1.stop(this.audioContext.currentTime + 1.2);
+                        osc2.stop(this.audioContext.currentTime + 1.2);
+                    };
+                    playBurst();
+                    this.ringInterval = setInterval(playBurst, 2500);
+                } catch (e) {
+                    console.warn('Could not play ringtone:', e);
+                }
+            }
+
+            stopRingtone() {
+                if (this.ringInterval) {
+                    clearInterval(this.ringInterval);
+                    this.ringInterval = null;
+                }
+            }
+
+            resetHotlineUI() {
+                if (this.els.hotlineRinging) this.els.hotlineRinging.style.display = 'none';
+                if (this.els.hotlineActive) this.els.hotlineActive.style.display = 'none';
+                if (this.els.hotlineIdle) this.els.hotlineIdle.style.display = 'block';
+                if (this.els.hotlineBadge) {
+                    this.els.hotlineBadge.style.background = 'rgba(0,206,201,0.2)';
+                    this.els.hotlineBadge.style.color = 'var(--secondary)';
+                    this.els.hotlineBadge.textContent = 'Hotline Ready';
+                }
+                if (this.els.callerMeterBar) this.els.callerMeterBar.style.width = '0%';
+            }
+
+            handleIncomingCall(callerId, callerName) {
+                this.pendingCallerId = callerId;
+                this.pendingCallerName = callerName || 'Listener';
+
+                if (this.els.ringingCallerName) {
+                    this.els.ringingCallerName.textContent = this.pendingCallerName;
+                }
+                if (this.els.hotlineIdle) this.els.hotlineIdle.style.display = 'none';
+                if (this.els.hotlineActive) this.els.hotlineActive.style.display = 'none';
+                if (this.els.hotlineRinging) this.els.hotlineRinging.style.display = 'block';
+
+                if (this.els.hotlineBadge) {
+                    this.els.hotlineBadge.style.background = 'rgba(231,76,60,0.3)';
+                    this.els.hotlineBadge.style.color = '#ff7675';
+                    this.els.hotlineBadge.textContent = '📞 Incoming Call!';
+                }
+
+                this.playRingtone();
+                this.log(`Incoming studio call from ${this.pendingCallerName}! Click "Accept (Off-Air)" to answer.`, 'warning');
+            }
+
+            handleCallCancelled(callerId) {
+                if (this.pendingCallerId === callerId) {
+                    this.pendingCallerId = null;
+                    this.pendingCallerName = null;
+                    this.stopRingtone();
+                    this.resetHotlineUI();
+                    this.log('Caller hung up before call was answered.', 'info');
+                }
+            }
+
+            handleCallEnded(reason) {
+                this.endCall(false);
+                this.log(`Live studio call ended: ${reason || 'Disconnected'}`, 'info');
+            }
+
+            async acceptCall() {
+                this.stopRingtone();
+                if (!this.pendingCallerId) return;
+
+                const callerId = this.pendingCallerId;
+                const callerName = this.pendingCallerName || 'Caller';
+                this.pendingCallerId = null;
+                this.pendingCallerName = null;
+
+                this.initAudioContext();
+                this.send({ type: 'call_accept', callerId });
+                await this.initWebRTC(callerId, callerName);
+            }
+
+            declineCall() {
+                this.stopRingtone();
+                if (this.pendingCallerId) {
+                    this.send({ type: 'call_decline', callerId: this.pendingCallerId, reason: 'DJ declined the call' });
+                    this.pendingCallerId = null;
+                    this.pendingCallerName = null;
+                }
+                this.resetHotlineUI();
+                this.log('Studio call declined.', 'info');
+            }
+
+            async initWebRTC(callerId, callerName) {
+                try {
+                    const pc = new RTCPeerConnection({
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' }
+                        ]
+                    });
+                    this.peerConnection = pc;
+                    this.activeCaller = { id: callerId, name: callerName, startTime: Date.now() };
+
+                    pc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            this.send({
+                                type: 'webrtc_signal',
+                                targetId: callerId,
+                                signal: { candidate: event.candidate }
+                            });
+                        }
+                    };
+
+                    pc.ontrack = (event) => {
+                        if (event.streams && event.streams[0]) {
+                            this.setupCallerAudio(event.streams[0]);
+                        }
+                    };
+
+                    // Send DJ mic to caller so caller can hear DJ
+                    if (this.mediaStream && this.mediaStream.getAudioTracks().length > 0) {
+                        this.mediaStream.getAudioTracks().forEach(t => pc.addTrack(t, this.mediaStream));
+                    } else {
+                        try {
+                            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            micStream.getAudioTracks().forEach(t => pc.addTrack(t, micStream));
+                        } catch (e) {
+                            console.warn('Could not capture mic to send to caller:', e);
+                        }
+                    }
+
+                    // Show active call UI
+                    if (this.els.hotlineRinging) this.els.hotlineRinging.style.display = 'none';
+                    if (this.els.hotlineIdle) this.els.hotlineIdle.style.display = 'none';
+                    if (this.els.hotlineActive) this.els.hotlineActive.style.display = 'block';
+                    if (this.els.activeCallerName) this.els.activeCallerName.textContent = callerName;
+                    if (this.els.activeCallTimer) this.els.activeCallTimer.textContent = '00:00';
+
+                    this.startActiveCallTimer();
+                    this.setCallerAirMode(false); // DEFAULT: OFF-AIR PRIVATE SCREENING!
+                    this.log(`Hotline connected with ${callerName}. Mode is OFF-AIR (Private). Click "Put ON-AIR" when ready to broadcast!`, 'success');
+                } catch (err) {
+                    this.log('WebRTC connection setup error: ' + err.message, 'error');
+                    console.error(err);
+                }
+            }
+
+            setupCallerAudio(remoteStream) {
+                try {
+                    this.initAudioContext();
+                    this.callerSource = this.audioContext.createMediaStreamSource(remoteStream);
+                    this.callerGain = this.audioContext.createGain();
+                    this.callerGain.gain.setValueAtTime(this.callerVolume, this.audioContext.currentTime);
+
+                    // 1. DJ Monitor: DJ always hears caller in headphones/speakers
+                    this.callerMonitorGain = this.audioContext.createGain();
+                    this.callerMonitorGain.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+
+                    // 2. Broadcast Gain: controls whether caller is heard by radio audience
+                    this.callerBroadcastGain = this.audioContext.createGain();
+                    this.callerBroadcastGain.gain.setValueAtTime(this.isCallerOnAir ? 1.0 : 0.0, this.audioContext.currentTime);
+
+                    // 3. Audio level analyser for caller
+                    this.callerAnalyser = this.audioContext.createAnalyser();
+                    this.callerAnalyser.fftSize = 64;
+
+                    this.callerSource.connect(this.callerGain);
+                    this.callerGain.connect(this.callerAnalyser);
+                    this.callerGain.connect(this.callerMonitorGain);
+                    this.callerMonitorGain.connect(this.audioContext.destination);
+
+                    this.callerGain.connect(this.callerBroadcastGain);
+                    if (this.streamDest) {
+                        try { this.callerBroadcastGain.connect(this.streamDest); } catch (_) {}
+                    }
+
+                    this.updateCallerLevelMeter();
+                } catch (e) {
+                    console.error('Error wiring caller audio graph:', e);
+                }
+            }
+
+            startActiveCallTimer() {
+                if (this.activeCaller && this.activeCaller.timerInterval) {
+                    clearInterval(this.activeCaller.timerInterval);
+                }
+                const start = Date.now();
+                const timerEl = this.els.activeCallTimer;
+                const interval = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - start) / 1000);
+                    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                    const s = String(elapsed % 60).padStart(2, '0');
+                    if (timerEl) timerEl.textContent = `${m}:${s}`;
+                }, 1000);
+                if (this.activeCaller) this.activeCaller.timerInterval = interval;
+            }
+
+            toggleCallerAirMode() {
+                this.setCallerAirMode(!this.isCallerOnAir);
+            }
+
+            setCallerAirMode(isOnAir) {
+                this.isCallerOnAir = isOnAir;
+                if (this.callerBroadcastGain && this.audioContext) {
+                    if (isOnAir && this.streamDest) {
+                        try { this.callerBroadcastGain.connect(this.streamDest); } catch (_) {}
+                    }
+                    const targetGain = isOnAir ? (this.isCallerMuted ? 0 : this.callerVolume) : 0.0;
+                    this.callerBroadcastGain.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.03);
+                }
+
+                if (isOnAir) {
+                    if (this.els.btnToggleAir) {
+                        this.els.btnToggleAir.className = 'btn-air-mode on-air';
+                        this.els.airModeText.innerHTML = '🔴 <strong>LIVE ON-AIR!</strong> — Click to Take OFF-AIR';
+                    }
+                    if (this.els.hotlineBadge) {
+                        this.els.hotlineBadge.style.background = 'rgba(231,76,60,0.3)';
+                        this.els.hotlineBadge.style.color = '#ff7675';
+                        this.els.hotlineBadge.textContent = '🔴 Caller On-Air';
+                    }
+                    this.log(`🔴 Caller ${this.activeCaller ? this.activeCaller.name : ''} is now LIVE ON AIR for all listeners!`, 'success');
+                } else {
+                    if (this.els.btnToggleAir) {
+                        this.els.btnToggleAir.className = 'btn-air-mode off-air';
+                        this.els.airModeText.innerHTML = '🎧 <strong>OFF-AIR (PRIVATE)</strong> — Click to Put ON-AIR 🔴';
+                    }
+                    if (this.els.hotlineBadge) {
+                        this.els.hotlineBadge.style.background = 'rgba(241,196,15,0.2)';
+                        this.els.hotlineBadge.style.color = '#f1c40f';
+                        this.els.hotlineBadge.textContent = '🎧 Off-Air (Private)';
+                    }
+                    this.log(`🎧 Caller ${this.activeCaller ? this.activeCaller.name : ''} set to Off-Air private screening.`, 'info');
+                }
+
+                if (this.activeCaller) {
+                    this.send({ type: 'call_mode', callerId: this.activeCaller.id, onAir: isOnAir });
+                }
+            }
+
+            toggleCallerMute() {
+                this.isCallerMuted = !this.isCallerMuted;
+                if (this.callerGain && this.audioContext) {
+                    const target = this.isCallerMuted ? 0 : this.callerVolume;
+                    this.callerGain.gain.setTargetAtTime(target, this.audioContext.currentTime, 0.03);
+                }
+                if (this.els.btnMuteCaller) {
+                    this.els.btnMuteCaller.style.background = this.isCallerMuted ? 'rgba(231,76,60,0.6)' : '';
+                    this.els.btnMuteCaller.innerHTML = this.isCallerMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+                }
+                this.log(this.isCallerMuted ? 'Caller audio muted.' : 'Caller audio unmuted.', 'info');
+            }
+
+            setCallerVolume(val) {
+                const v = parseInt(val, 10);
+                this.callerVolume = v / 100;
+                if (this.els.callerVolLabel) this.els.callerVolLabel.textContent = `${v}%`;
+                if (this.callerGain && !this.isCallerMuted && this.audioContext) {
+                    this.callerGain.gain.setValueAtTime(this.callerVolume, this.audioContext.currentTime);
+                }
+            }
+
+            endCall(notifyServer = true) {
+                if (notifyServer && this.activeCaller) {
+                    this.send({ type: 'call_hangup', callerId: this.activeCaller.id });
+                }
+                this.stopRingtone();
+                if (this.peerConnection) {
+                    try { this.peerConnection.close(); } catch (_) {}
+                    this.peerConnection = null;
+                }
+                if (this.activeCaller && this.activeCaller.timerInterval) {
+                    clearInterval(this.activeCaller.timerInterval);
+                }
+                this.activeCaller = null;
+                this.isCallerOnAir = false;
+                this.isCallerMuted = false;
+                cancelAnimationFrame(this.callerAnimFrame);
+
+                if (this.callerGain) {
+                    try { this.callerGain.disconnect(); } catch (_) {}
+                }
+                if (this.callerMonitorGain) {
+                    try { this.callerMonitorGain.disconnect(); } catch (_) {}
+                }
+                if (this.callerBroadcastGain) {
+                    try { this.callerBroadcastGain.disconnect(); } catch (_) {}
+                }
+
+                this.callerSource = null;
+                this.callerGain = null;
+                this.callerMonitorGain = null;
+                this.callerBroadcastGain = null;
+                this.callerAnalyser = null;
+
+                this.resetHotlineUI();
+            }
+
+            updateCallerLevelMeter() {
+                if (!this.activeCaller || !this.callerAnalyser) return;
+                const data = new Uint8Array(this.callerAnalyser.frequencyBinCount);
+                this.callerAnalyser.getByteFrequencyData(data);
+                let sum = 0;
+                for (let i = 0; i < data.length; i++) sum += data[i];
+                const energy = sum / data.length / 255;
+                if (this.els.callerMeterBar) {
+                    this.els.callerMeterBar.style.width = `${Math.min(100, energy * 180)}%`;
+                }
+                this.callerAnimFrame = requestAnimationFrame(() => this.updateCallerLevelMeter());
+            }
+
+            async handleWebRTCSignal(fromId, signal) {
+                if (!this.peerConnection) return;
+                try {
+                    if (signal.sdp) {
+                        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+                        if (signal.sdp.type === 'offer') {
+                            const answer = await this.peerConnection.createAnswer();
+                            await this.peerConnection.setLocalDescription(answer);
+                            this.send({
+                                type: 'webrtc_signal',
+                                targetId: fromId,
+                                signal: { sdp: this.peerConnection.localDescription }
+                            });
+                        }
+                    } else if (signal.candidate) {
+                        await this.peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                    }
+                } catch (err) {
+                    console.error('WebRTC signal handling failed:', err);
+                }
+            }
+
+            // ========================================================
+            // DIRECT CHAT SYSTEM
+            // ========================================================
+            updateChatUser(id, name, isJoined, onlineCount) {
+                if (typeof onlineCount === 'number' && this.els.chatUsersBadge) {
+                    this.els.chatUsersBadge.textContent = `${onlineCount} Online`;
+                }
+                if (isJoined && id && name) {
+                    this.knownListeners.set(id, name);
+                    this.refreshRecipientDropdown();
+                } else if (!isJoined && id) {
+                    this.knownListeners.delete(id);
+                    this.refreshRecipientDropdown();
+                }
+            }
+
+            refreshRecipientDropdown() {
+                if (!this.els.djChatRecipient) return;
+                const current = this.els.djChatRecipient.value;
+                this.els.djChatRecipient.innerHTML = '<option value="all">📢 All Listeners</option>';
+                for (const [id, name] of this.knownListeners.entries()) {
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = `👤 Direct: ${name}`;
+                    this.els.djChatRecipient.appendChild(opt);
+                }
+                if ([...this.els.djChatRecipient.options].some(o => o.value === current)) {
+                    this.els.djChatRecipient.value = current;
+                }
+            }
+
+            receiveChatMessage(msg) {
+                if (!this.els.djChatMessages) return;
+
+                // Remove placeholder if present
+                const placeholder = this.els.djChatMessages.querySelector('div');
+                if (placeholder && placeholder.textContent.includes('No messages yet')) {
+                    placeholder.remove();
+                }
+
+                // Add to recipient list if new listener
+                if (msg.fromId && msg.fromId !== 'dj' && msg.sender) {
+                    if (!this.knownListeners.has(msg.fromId)) {
+                        this.knownListeners.set(msg.fromId, msg.sender);
+                        this.refreshRecipientDropdown();
+                    }
+                }
+
+                const div = document.createElement('div');
+                div.className = `dj-chat-msg ${msg.isFromDJ ? 'from-dj' : ''}`;
+                const timeStr = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                div.innerHTML = `
+                    <div class="chat-meta">
+                        <span class="chat-sender">${escapeHTML(msg.sender || 'Listener')}</span>
+                        <span>${timeStr}${msg.isDirect ? ' · <em style="color:#00CEC9;">Direct</em>' : ''}</span>
+                    </div>
+                    <div class="chat-text">${escapeHTML(msg.text)}</div>
+                `;
+                this.els.djChatMessages.appendChild(div);
+                this.els.djChatMessages.scrollTop = this.els.djChatMessages.scrollHeight;
+            }
+
+            sendDJChatMessage() {
+                if (!this.els.djChatText) return;
+                const text = this.els.djChatText.value.trim();
+                if (!text) return;
+                const recipientId = this.els.djChatRecipient ? this.els.djChatRecipient.value : 'all';
+
+                this.send({
+                    type: 'chat',
+                    recipientId: recipientId === 'all' ? undefined : recipientId,
+                    text
+                });
+
+                this.els.djChatText.value = '';
             }
         }
 
