@@ -1,9 +1,9 @@
 /**
- * Wave Radio service worker
+ * Bethel Radio service worker
  * - Network-first for same-origin pages/assets (always get the latest deploy, fall back to cache offline)
  * - Never touches non-GET requests or cross-origin requests (audio streams, relay server, CDNs)
  */
-const CACHE_NAME = 'wave-radio-cache-v3';
+const CACHE_NAME = 'bethel-radio-cache-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

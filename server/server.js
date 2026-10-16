@@ -1,5 +1,5 @@
 /**
- * Wave Radio Relay Server
+ * Bethel Radio Relay Server
  * DJ (WebSocket /ws) ──audio──▶ this server ──HTTP /stream──▶ listeners
  */
 const http = require('http');
@@ -133,9 +133,9 @@ function handleStatus(req, res) {
 
 function handleRoot(req, res) {
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(`<!DOCTYPE html><html><head><title>Wave Radio Relay</title>
+  res.end(`<!DOCTYPE html><html><head><title>Bethel Radio Relay</title>
 <style>body{font-family:sans-serif;background:#0a0a0f;color:#fff;text-align:center;padding:50px}a{color:#00CEC9}</style></head>
-<body><h1>🟢 Wave Radio Relay Server is running</h1>
+<body><h1>🟢 Bethel Radio Relay Server is running</h1>
 <p>Status: <b>${broadcastInfo.isLive ? 'LIVE — ' + broadcastInfo.djName : 'Off air'}</b> · Listeners: ${listeners.size}</p>
 <p><a href="/status">/status</a> · <a href="/health">/health</a> · <a href="/stream">/stream</a></p>
 <p>DJ WebSocket endpoint: <code>wss://${req.headers.host}/ws</code></p></body></html>`);

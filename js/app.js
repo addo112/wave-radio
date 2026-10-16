@@ -8,7 +8,7 @@
  */
 
 const CONFIG = {
-  stationName: 'Wave Radio',
+  stationName: 'Bethel Radio',
   defaultVolume: 0.7,
   reconnectDelay: 3000,
   maxReconnectAttempts: 10,
@@ -1309,7 +1309,7 @@ class UIManager {
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
   try {
-    console.log('%c Wave Radio initialized 🌊 ', 'background: #7b2cbf; color: #fff; font-size: 16px; padding: 4px; border-radius: 4px;');
+    console.log('%c Bethel Radio initialized 📻 ', 'background: #7b2cbf; color: #fff; font-size: 16px; padding: 4px; border-radius: 4px;');
     
     // Create globals for cross-class communication
     window.uiManager = new UIManager();

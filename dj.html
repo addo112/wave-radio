@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wave Radio - DJ Dashboard</title>
+    <title>Bethel Radio - DJ Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -680,7 +680,7 @@
     <!-- Login Gate -->
     <div id="login-gate" class="gate-container">
         <div class="login-card glass-card">
-            <h2 class="text-gradient">Wave Radio DJ</h2>
+            <h2 class="text-gradient">Bethel Radio DJ</h2>
             <p>Login to start your live broadcast</p>
             <form id="login-form">
                 <input type="text" id="login-name" placeholder="DJ Name" required autocomplete="off">
@@ -696,7 +696,7 @@
         <!-- Header -->
         <header class="glass-card">
             <div class="header-logo text-gradient">
-                <i class="fas fa-wave-square"></i> Wave Radio DJ Studio
+                <i class="fas fa-broadcast-tower"></i> Bethel Radio DJ Studio
             </div>
             <div class="header-controls">
                 <div class="status-indicator">
@@ -1201,7 +1201,7 @@
             parseSongName(filename) {
                 let clean = filename.replace(/\.[^/.]+$/, '');
                 clean = clean.replace(/^[0-9]+[\s._-]+/, '');
-                let artist = this.djName || 'Wave Radio DJ';
+                let artist = this.djName || 'Bethel Radio DJ';
                 let title = clean;
                 if (clean.includes(' - ')) {
                     const parts = clean.split(' - ');

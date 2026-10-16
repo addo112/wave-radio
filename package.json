@@ -1,7 +1,7 @@
 {
   "name": "wave-radio",
   "version": "1.0.0",
-  "description": "Wave Radio - Feel The Frequency. 24/7 Internet Radio Station",
+  "description": "Bethel Radio - Feel The Frequency. 24/7 Internet Radio Station",
   "scripts": {
     "dev": "netlify dev",
     "build": "echo 'Static site - no build needed'",

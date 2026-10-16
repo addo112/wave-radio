@@ -62,7 +62,7 @@ export const handler = async (event) => {
       headers,
       body: JSON.stringify({
         isLive: false,
-        title: 'Wave Radio',
+        title: 'Bethel Radio',
         artist: 'Station Library / Ready for Broadcast',
         startedAt: new Date().toISOString()
       })
@@ -73,7 +73,7 @@ export const handler = async (event) => {
       headers,
       body: JSON.stringify({
         isLive: false,
-        title: 'Wave Radio',
+        title: 'Bethel Radio',
         artist: 'Feel The Frequency',
         startedAt: new Date().toISOString()
       })

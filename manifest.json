@@ -1,6 +1,6 @@
 {
-  "name": "Wave Radio",
-  "short_name": "WaveRadio",
+  "name": "Bethel Radio",
+  "short_name": "BethelRadio",
   "description": "Feel The Frequency - 24/7 Internet Radio",
   "start_url": "/",
   "display": "standalone",
