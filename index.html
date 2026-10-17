@@ -124,25 +124,10 @@
                         </div>
                     </div>
 
-                    <!-- Track Scrubber (Active when playing uploaded station tracks) -->
-                    <div class="track-scrubber" id="track-scrubber" style="display: none;">
-                        <span id="track-current-time" class="time-label">0:00</span>
-                        <div class="progress-bar-container" id="progress-container">
-                            <div class="progress-bar-fill" id="progress-fill"></div>
-                        </div>
-                        <span id="track-total-time" class="time-label">0:00</span>
-                    </div>
-
                     <div class="player-controls">
                         <div class="playback-buttons">
-                            <button id="prev-track-btn" class="control-btn" title="Previous Track" aria-label="Previous Track" style="display: none;">
-                                <i class="fas fa-step-backward"></i>
-                            </button>
                             <button id="play-btn" class="play-button glow" aria-label="Play/Pause">
                                 <i class="fas fa-play"></i>
-                            </button>
-                            <button id="next-track-btn" class="control-btn" title="Next Track" aria-label="Next Track" style="display: none;">
-                                <i class="fas fa-step-forward"></i>
                             </button>
                         </div>
                         
@@ -152,10 +137,6 @@
                         </div>
                         
                         <div class="player-right-actions">
-                            <button id="btn-open-library" class="btn btn-outline btn-sm library-toggle-btn" title="Upload & Station Music Library">
-                                <i class="fas fa-cloud-upload-alt"></i> <span>Upload Music</span>
-                                <span id="library-count-badge" class="badge">0</span>
-                            </button>
                             <div class="listener-stats">
                                 <span id="listener-count" class="listener-badge">
                                     <i class="fas fa-users"></i> 0
@@ -164,46 +145,7 @@
                         </div>
                     </div>
                     
-                    <audio id="radio-stream" crossorigin="anonymous" preload="none"></audio>
-                </div>
-
-                <!-- Station Music Library Modal -->
-                <div id="library-modal" class="modal-overlay" style="display: none;">
-                    <div class="modal-card glass">
-                        <div class="modal-header">
-                            <div class="modal-title">
-                                <i class="fas fa-music text-gradient"></i>
-                                <h3>Station Music Library</h3>
-                            </div>
-                            <button id="btn-close-library" class="modal-close" aria-label="Close Library">&times;</button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="upload-dropzone" id="upload-dropzone">
-                                <i class="fas fa-cloud-upload-alt upload-icon"></i>
-                                <h4>Drop your audio files here</h4>
-                                <p>Upload MP3, WAV, AAC, M4A, OGG, FLAC</p>
-                                <label for="station-file-input" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-folder-open"></i> Choose Music Files
-                                </label>
-                                <input type="file" id="station-file-input" multiple accept="audio/*" style="display: none;">
-                            </div>
-
-                            <div class="library-toolbar">
-                                <span id="library-status-text">0 tracks uploaded</span>
-                                <div class="library-toolbar-actions">
-                                    <button id="btn-shuffle-library" class="btn btn-icon-only" title="Shuffle Tracks"><i class="fas fa-random"></i></button>
-                                    <button id="btn-clear-library" class="btn btn-icon-only btn-danger" title="Clear All Tracks"><i class="fas fa-trash-alt"></i></button>
-                                </div>
-                            </div>
-
-                            <div class="library-tracks-list" id="library-tracks-list">
-                                <div class="empty-library-state">
-                                    <i class="fas fa-compact-disc"></i>
-                                    <p>No music uploaded yet.<br>Upload your favorite tracks to build your station's playlist!</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <audio id="radio-stream" crossorigin="anonymous" preload="auto"></audio>
                 </div>
             </div>
         </section>

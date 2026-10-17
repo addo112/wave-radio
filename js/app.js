@@ -9,7 +9,11 @@
 
 const CONFIG = {
   stationName: 'Bethel Radio',
-  defaultVolume: 0.7,
+  streams: [
+    { url: 'https://stream.zeno.fm/yn65fsaurfhvv', format: 'mp3', label: '24/7 Station Stream' },
+    { url: 'https://wave-radio-relay.onrender.com/stream', format: 'webm', label: 'Live DJ Studio' }
+  ],
+  defaultVolume: 0.8,
   reconnectDelay: 3000,
   maxReconnectAttempts: 10,
   metadataInterval: 8000, // poll every 8s
@@ -58,354 +62,19 @@ function formatTime(seconds) {
 }
 
 /**
- * Station Music Library
- * Manages uploaded audio tracks in browser IndexedDB
- */
-class StationLibrary {
-  constructor(player) {
-    this.player = player;
-    this.dbName = 'WaveRadioStationDB';
-    this.dbVersion = 1;
-    this.storeName = 'station_tracks';
-    this.db = null;
-    this.tracks = [];
-    
-    // DOM Elements
-    this.modal = document.getElementById('library-modal');
-    this.openBtn = document.getElementById('btn-open-library');
-    this.closeBtn = document.getElementById('btn-close-library');
-    this.dropzone = document.getElementById('upload-dropzone');
-    this.fileInput = document.getElementById('station-file-input');
-    this.tracksList = document.getElementById('library-tracks-list');
-    this.statusText = document.getElementById('library-status-text');
-    this.badge = document.getElementById('library-count-badge');
-    this.clearBtn = document.getElementById('btn-clear-library');
-    this.shuffleBtn = document.getElementById('btn-shuffle-library');
-    
-    this.init();
-  }
-
-  async init() {
-    this.setupUIListeners();
-    await this.openDB();
-    await this.loadTracks();
-  }
-
-  openDB() {
-    return new Promise((resolve) => {
-      if (!window.indexedDB) {
-        console.warn('IndexedDB not supported, falling back to memory');
-        resolve(null);
-        return;
-      }
-      try {
-        const req = indexedDB.open(this.dbName, this.dbVersion);
-        req.onupgradeneeded = (e) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains(this.storeName)) {
-            db.createObjectStore(this.storeName, { keyPath: 'id' });
-          }
-        };
-        req.onsuccess = (e) => {
-          this.db = e.target.result;
-          resolve(this.db);
-        };
-        req.onerror = () => resolve(null);
-      } catch (_) {
-        resolve(null);
-      }
-    });
-  }
-
-  setupUIListeners() {
-    if (this.openBtn) {
-      this.openBtn.addEventListener('click', () => this.openModal());
-    }
-    if (this.closeBtn) {
-      this.closeBtn.addEventListener('click', () => this.closeModal());
-    }
-    if (this.modal) {
-      this.modal.addEventListener('click', (e) => {
-        if (e.target === this.modal) this.closeModal();
-      });
-    }
-
-    if (this.fileInput) {
-      this.fileInput.addEventListener('change', (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-          this.handleFiles(e.target.files);
-          this.fileInput.value = '';
-        }
-      });
-    }
-
-    if (this.dropzone) {
-      ['dragenter', 'dragover'].forEach(name => {
-        this.dropzone.addEventListener(name, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.dropzone.classList.add('dragover');
-        });
-      });
-      ['dragleave', 'drop'].forEach(name => {
-        this.dropzone.addEventListener(name, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.dropzone.classList.remove('dragover');
-        });
-      });
-      this.dropzone.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        if (dt && dt.files && dt.files.length > 0) {
-          this.handleFiles(dt.files);
-        }
-      });
-    }
-
-    if (this.clearBtn) {
-      this.clearBtn.addEventListener('click', () => {
-        if (this.tracks.length === 0) return;
-        if (confirm('Clear all uploaded station tracks?')) {
-          this.clearAll();
-        }
-      });
-    }
-
-    if (this.shuffleBtn) {
-      this.shuffleBtn.addEventListener('click', () => {
-        if (this.tracks.length > 1) {
-          this.shuffleTracks();
-          window.uiManager?.showToast('Station tracks shuffled!', 'info', 2500);
-        }
-      });
-    }
-  }
-
-  openModal() {
-    if (this.modal) this.modal.style.display = 'flex';
-  }
-
-  closeModal() {
-    if (this.modal) this.modal.style.display = 'none';
-  }
-
-  parseTrackName(fileName) {
-    let clean = fileName.replace(/\.[^/.]+$/, '');
-    clean = clean.replace(/^[0-9]+[\s._-]+/, '');
-    
-    let artist = 'Station Music';
-    let title = clean;
-    
-    if (clean.includes(' - ')) {
-      const parts = clean.split(' - ');
-      artist = parts[0].trim();
-      title = parts.slice(1).join(' - ').trim();
-    }
-    
-    return { title, artist };
-  }
-
-  async handleFiles(fileList) {
-    const audioFiles = Array.from(fileList).filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
-    
-    if (audioFiles.length === 0) {
-      window.uiManager?.showToast('Please select audio files (.mp3, .wav, .m4a, etc.)', 'warning');
-      return;
-    }
-
-    let addedCount = 0;
-    for (const file of audioFiles) {
-      const { title, artist } = this.parseTrackName(file.name);
-      const track = {
-        id: 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-        title,
-        artist,
-        name: file.name,
-        size: file.size,
-        blob: file,
-        dateAdded: Date.now()
-      };
-      await this.saveTrackToDB(track);
-      this.tracks.push(track);
-      addedCount++;
-    }
-
-    this.renderTrackList();
-    this.updateBadge();
-    window.uiManager?.showToast(`Added ${addedCount} song(s) to station library!`, 'success', 3000);
-
-    if (this.player && this.player.currentTrackIndex === -1 && this.tracks.length > 0 && !this.player.isLive) {
-      this.player.loadTrack(0, false);
-    }
-  }
-
-  saveTrackToDB(track) {
-    if (!this.db) return Promise.resolve();
-    return new Promise((resolve) => {
-      try {
-        const tx = this.db.transaction(this.storeName, 'readwrite');
-        tx.objectStore(this.storeName).put(track);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      } catch (_) {
-        resolve();
-      }
-    });
-  }
-
-  loadTracks() {
-    if (!this.db) return Promise.resolve();
-    return new Promise((resolve) => {
-      try {
-        const tx = this.db.transaction(this.storeName, 'readonly');
-        const req = tx.objectStore(this.storeName).getAll();
-        req.onsuccess = () => {
-          this.tracks = req.result || [];
-          this.renderTrackList();
-          this.updateBadge();
-          if (this.tracks.length > 0 && this.player && !this.player.isLive) {
-            this.player.loadTrack(0, false);
-          }
-          resolve();
-        };
-        req.onerror = () => resolve();
-      } catch (_) {
-        resolve();
-      }
-    });
-  }
-
-  deleteTrack(id) {
-    if (this.db) {
-      try {
-        const tx = this.db.transaction(this.storeName, 'readwrite');
-        tx.objectStore(this.storeName).delete(id);
-      } catch (_) {}
-    }
-    const idx = this.tracks.findIndex(t => t.id === id);
-    if (idx !== -1) {
-      const wasCurrent = this.player && this.player.currentTrackIndex === idx;
-      this.tracks.splice(idx, 1);
-      this.renderTrackList();
-      this.updateBadge();
-
-      if (wasCurrent && this.player && !this.player.isLive) {
-        if (this.tracks.length > 0) {
-          const nextIdx = idx >= this.tracks.length ? 0 : idx;
-          this.player.loadTrack(nextIdx, this.player.isPlaying);
-        } else {
-          this.player.resetToOffAir();
-        }
-      }
-    }
-  }
-
-  clearAll() {
-    if (this.db) {
-      try {
-        const tx = this.db.transaction(this.storeName, 'readwrite');
-        tx.objectStore(this.storeName).clear();
-      } catch (_) {}
-    }
-    this.tracks = [];
-    this.renderTrackList();
-    this.updateBadge();
-    if (this.player && !this.player.isLive) {
-      this.player.resetToOffAir();
-    }
-    window.uiManager?.showToast('Station library cleared.', 'info');
-  }
-
-  shuffleTracks() {
-    for (let i = this.tracks.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [this.tracks[i], this.tracks[j]] = [this.tracks[j], this.tracks[i]];
-    }
-    this.renderTrackList();
-    if (this.player && this.tracks.length > 0 && !this.player.isLive) {
-      this.player.loadTrack(0, this.player.isPlaying);
-    }
-  }
-
-  updateBadge() {
-    const count = this.tracks.length;
-    if (this.badge) this.badge.textContent = count;
-    if (this.statusText) this.statusText.textContent = `${count} track${count === 1 ? '' : 's'} uploaded`;
-    
-    const prevBtn = document.getElementById('prev-track-btn');
-    const nextBtn = document.getElementById('next-track-btn');
-    const displayStyle = (count > 1 && (!this.player || !this.player.isLive)) ? 'flex' : 'none';
-    if (prevBtn) prevBtn.style.display = displayStyle;
-    if (nextBtn) nextBtn.style.display = displayStyle;
-  }
-
-  renderTrackList() {
-    if (!this.tracksList) return;
-
-    if (this.tracks.length === 0) {
-      this.tracksList.innerHTML = `
-        <div class="empty-library-state">
-            <i class="fas fa-compact-disc"></i>
-            <p>No music uploaded yet.<br>Upload your favorite audio files to build your station's playlist!</p>
-        </div>
-      `;
-      return;
-    }
-
-    this.tracksList.innerHTML = '';
-    this.tracks.forEach((track, index) => {
-      const item = document.createElement('div');
-      item.className = 'track-item' + (this.player && this.player.currentTrackIndex === index ? ' active' : '');
-      item.innerHTML = `
-        <span class="track-index">${index + 1}</span>
-        <div class="track-details">
-            <div class="track-name">${escapeHTML(track.title)}</div>
-            <p class="track-meta">${escapeHTML(track.artist)}</p>
-        </div>
-        <button class="track-remove-btn" title="Remove track" data-id="${track.id}">
-            <i class="fas fa-times"></i>
-        </button>
-      `;
-
-      item.addEventListener('click', (e) => {
-        if (e.target.closest('.track-remove-btn')) {
-          e.stopPropagation();
-          this.deleteTrack(track.id);
-          return;
-        }
-        if (this.player) {
-          this.player.loadTrack(index, true);
-          this.closeModal();
-        }
-      });
-
-      this.tracksList.appendChild(item);
-    });
-  }
-}
-
-/**
  * RadioPlayer Class
- * Coordinates audio playback for both Live DJ streams and uploaded station tracks
+ * Coordinates audio playback for 24/7 internet radio stream
+ * and seamless takeover when the DJ broadcasts live.
  */
 class RadioPlayer {
   constructor() {
     this.audio = document.getElementById('radio-stream');
     this.playBtn = document.getElementById('play-btn');
     this.playIcon = this.playBtn ? this.playBtn.querySelector('i') : null;
-    this.prevBtn = document.getElementById('prev-track-btn');
-    this.nextBtn = document.getElementById('next-track-btn');
     this.volumeSlider = document.getElementById('volume-slider');
     this.muteBtn = document.querySelector('.volume-icon');
     this.muteIcon = this.muteBtn || null;
     
-    // Scrubber elements
-    this.scrubber = document.getElementById('track-scrubber');
-    this.progressContainer = document.getElementById('progress-container');
-    this.progressFill = document.getElementById('progress-fill');
-    this.currentTimeEl = document.getElementById('track-current-time');
-    this.totalTimeEl = document.getElementById('track-total-time');
-
     this.canvas = document.getElementById('visualizer-canvas');
     this.canvasCtx = this.canvas ? this.canvas.getContext('2d') : null;
     this.nowPlayingTitle = document.getElementById('now-playing-title');
@@ -413,9 +82,9 @@ class RadioPlayer {
     this.listenerCountDisplay = document.getElementById('listener-count');
     this.equalizer = document.querySelector('.equalizer');
     
-    this.currentTrackIndex = -1;
+    this.streams = CONFIG.streams;
+    this.currentStreamIndex = 0;
     this.isLive = false;
-    this.activeBlobUrl = null;
     this.reconnectAttempts = 0;
     this.isPlaying = false;
     this.isMuted = false;
@@ -423,16 +92,16 @@ class RadioPlayer {
     this.analyser = null;
     this.source = null;
     this.animationId = null;
+    this.autoplayPill = null;
+    this.firstTouchHandler = null;
     
     this.intervals = {
       metadata: null,
       listeners: null
     };
     
-    this.currentSong = { title: CONFIG.stationName, artist: 'Feel The Frequency' };
+    this.currentSong = { title: CONFIG.stationName, artist: '24/7 Live Stream' };
     
-    // Initialize station library
-    this.library = new StationLibrary(this);
     this.init();
   }
 
@@ -442,11 +111,15 @@ class RadioPlayer {
     this.audio.volume = CONFIG.defaultVolume;
     if (this.volumeSlider) this.volumeSlider.value = Math.round(CONFIG.defaultVolume * 100);
     
+    this.setStreamSource();
     this.setupEventListeners();
     this.setupMediaSession();
     this.startPolling();
     this.setupUnloadTracking();
     
+    // Attempt automatic playback as soon as the page opens
+    this.autoStartListening();
+
     // Responsive canvas
     if (this.canvas) {
       this.resizeCanvas();
@@ -454,17 +127,108 @@ class RadioPlayer {
     }
   }
 
+  setStreamSource(url) {
+    if (!this.audio) return;
+    const targetUrl = url || (this.streams && this.streams[this.currentStreamIndex] ? this.streams[this.currentStreamIndex].url : '');
+    if (targetUrl && this.audio.src !== targetUrl) {
+      this.audio.src = targetUrl;
+      this.audio.load();
+    }
+  }
+
+  /**
+   * Automatic listening on page load / entry
+   * Modern browsers enforce autoplay restrictions that require user interaction
+   * if the user has not interacted with the domain before.
+   * If blocked, we present a prompt pill and attach a one-touch listener anywhere on the page.
+   */
+  autoStartListening() {
+    if (!this.audio) return;
+    
+    const playPromise = this.audio.play();
+    if (playPromise !== undefined) {
+      playPromise.then(() => {
+        console.log('Bethel Radio: Autoplay started successfully.');
+        this.hideAutoplayPill();
+      }).catch((err) => {
+        console.log('Bethel Radio: Autoplay awaiting user interaction:', err.name);
+        this.showAutoplayPill();
+        this.setupFirstTouchAutoplay();
+      });
+    }
+  }
+
+  showAutoplayPill() {
+    if (this.autoplayPill) {
+      this.autoplayPill.style.display = 'flex';
+      this.autoplayPill.style.opacity = '1';
+      return;
+    }
+    const pill = document.createElement('div');
+    pill.id = 'autoplay-pill';
+    pill.className = 'autoplay-pill';
+    pill.innerHTML = '<i class="fas fa-volume-up"></i> <span>Tap anywhere to listen live</span>';
+    pill.title = 'Click or tap anywhere on page to start radio';
+    pill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.triggerFirstTouchPlayback();
+    });
+    document.body.appendChild(pill);
+    this.autoplayPill = pill;
+  }
+
+  hideAutoplayPill() {
+    if (this.autoplayPill) {
+      this.autoplayPill.style.opacity = '0';
+      setTimeout(() => {
+        if (this.autoplayPill) {
+          this.autoplayPill.remove();
+          this.autoplayPill = null;
+        }
+      }, 300);
+    }
+  }
+
+  setupFirstTouchAutoplay() {
+    if (this.firstTouchHandler) return;
+    
+    this.firstTouchHandler = () => {
+      this.triggerFirstTouchPlayback();
+    };
+
+    const events = ['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'];
+    events.forEach(evt => {
+      document.addEventListener(evt, this.firstTouchHandler, { capture: true, once: true });
+    });
+  }
+
+  async triggerFirstTouchPlayback() {
+    if (this.firstTouchHandler) {
+      const events = ['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'];
+      events.forEach(evt => {
+        document.removeEventListener(evt, this.firstTouchHandler, { capture: true });
+      });
+      this.firstTouchHandler = null;
+    }
+    this.hideAutoplayPill();
+
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try { await this.audioContext.resume(); } catch (_) {}
+    }
+
+    if (this.audio && this.audio.paused) {
+      try {
+        if (!this.audio.src) this.setStreamSource();
+        await this.audio.play();
+      } catch (e) {
+        console.warn('Playback on interaction failed:', e);
+      }
+    }
+  }
+
   setupEventListeners() {
     if (this.playBtn) {
       this.playBtn.addEventListener('click', () => this.togglePlay());
-    }
-
-    if (this.prevBtn) {
-      this.prevBtn.addEventListener('click', () => this.playPrevTrack());
-    }
-
-    if (this.nextBtn) {
-      this.nextBtn.addEventListener('click', () => this.playNextTrack());
     }
     
     if (this.volumeSlider) {
@@ -473,10 +237,6 @@ class RadioPlayer {
     
     if (this.muteBtn) {
       this.muteBtn.addEventListener('click', () => this.toggleMute());
-    }
-
-    if (this.progressContainer) {
-      this.progressContainer.addEventListener('click', (e) => this.seekAudio(e));
     }
     
     // Audio Events
@@ -487,107 +247,19 @@ class RadioPlayer {
     this.audio.addEventListener('waiting', () => this.handleWaiting());
     this.audio.addEventListener('canplay', () => this.handleCanPlay());
     this.audio.addEventListener('stalled', () => this.handleStalled());
-    this.audio.addEventListener('timeupdate', () => this.updateScrubber());
-    this.audio.addEventListener('loadedmetadata', () => this.updateScrubber());
-  }
-
-  loadTrack(index, autoPlay = true) {
-    if (!this.library || !this.library.tracks || index < 0 || index >= this.library.tracks.length) return;
-    
-    if (this.activeBlobUrl) {
-      try { URL.revokeObjectURL(this.activeBlobUrl); } catch (_) {}
-    }
-
-    this.currentTrackIndex = index;
-    const track = this.library.tracks[index];
-    this.activeBlobUrl = URL.createObjectURL(track.blob);
-    this.audio.src = this.activeBlobUrl;
-    this.audio.load();
-
-    this.currentSong = { title: track.title, artist: track.artist };
-    this.updateMetadataUI();
-
-    if (this.scrubber) this.scrubber.style.display = 'flex';
-    this.library.renderTrackList();
-    this.library.updateBadge();
-
-    if (autoPlay) {
-      this.audio.play().catch(e => console.warn('Playback error:', e));
-    }
-  }
-
-  playNextTrack() {
-    if (this.isLive || !this.library || this.library.tracks.length === 0) return;
-    const nextIdx = (this.currentTrackIndex + 1) % this.library.tracks.length;
-    this.loadTrack(nextIdx, true);
-  }
-
-  playPrevTrack() {
-    if (this.isLive || !this.library || this.library.tracks.length === 0) return;
-    const prevIdx = (this.currentTrackIndex - 1 + this.library.tracks.length) % this.library.tracks.length;
-    this.loadTrack(prevIdx, true);
-  }
-
-  resetToOffAir() {
-    this.audio.pause();
-    this.audio.src = '';
-    this.currentTrackIndex = -1;
-    this.currentSong = { title: CONFIG.stationName, artist: 'Station Ready - Upload Your Music' };
-    this.updateMetadataUI();
-    if (this.scrubber) this.scrubber.style.display = 'none';
-    if (this.prevBtn) this.prevBtn.style.display = 'none';
-    if (this.nextBtn) this.nextBtn.style.display = 'none';
-    this.setUIState('paused');
-  }
-
-  seekAudio(e) {
-    if (this.isLive || !this.audio.duration || !isFinite(this.audio.duration)) return;
-    const rect = this.progressContainer.getBoundingClientRect();
-    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    this.audio.currentTime = pos * this.audio.duration;
-  }
-
-  updateScrubber() {
-    if (this.isLive || !this.audio || !this.audio.duration || !isFinite(this.audio.duration)) return;
-    const cur = this.audio.currentTime || 0;
-    const dur = this.audio.duration || 0;
-    const pct = dur > 0 ? (cur / dur) * 100 : 0;
-    
-    if (this.progressFill) this.progressFill.style.width = `${pct}%`;
-    if (this.currentTimeEl) this.currentTimeEl.textContent = formatTime(cur);
-    if (this.totalTimeEl) this.totalTimeEl.textContent = formatTime(dur);
   }
 
   async togglePlay() {
     try {
-      if (this.isLive) {
-        if (this.audio.paused) {
-          if (this.audioContext && this.audioContext.state === 'suspended') {
-            await this.audioContext.resume();
-          }
-          await this.audio.play();
-        } else {
-          this.audio.pause();
-        }
-        return;
-      }
-
-      // Station music mode
-      if (!this.library || this.library.tracks.length === 0) {
-        this.library.openModal();
-        window.uiManager?.showToast('No music uploaded yet! Upload your audio files to start listening.', 'info', 4000);
-        return;
-      }
-
+      this.hideAutoplayPill();
       if (this.audio.paused) {
         if (this.audioContext && this.audioContext.state === 'suspended') {
           await this.audioContext.resume();
         }
-        if (!this.audio.src || this.currentTrackIndex === -1) {
-          this.loadTrack(0, true);
-        } else {
-          await this.audio.play();
+        if (!this.audio.src) {
+          this.setStreamSource();
         }
+        await this.audio.play();
       } else {
         this.audio.pause();
       }
@@ -601,12 +273,11 @@ class RadioPlayer {
     this.isLive = true;
     const wasPlaying = this.isPlaying;
     
-    if (this.scrubber) this.scrubber.style.display = 'none';
-    if (this.prevBtn) this.prevBtn.style.display = 'none';
-    if (this.nextBtn) this.nextBtn.style.display = 'none';
-
     this.audio.src = liveStreamUrl;
     this.audio.load();
+
+    this.currentSong = { title: 'Live DJ Broadcast', artist: 'Bethel Radio Studio' };
+    this.updateMetadataUI();
 
     if (wasPlaying) {
       this.audio.play().catch(e => console.warn('Auto-play blocked:', e));
@@ -615,11 +286,14 @@ class RadioPlayer {
 
   handleLiveEnded() {
     this.isLive = false;
-    if (this.library && this.library.tracks.length > 0) {
-      const idx = this.currentTrackIndex >= 0 ? this.currentTrackIndex : 0;
-      this.loadTrack(idx, this.isPlaying);
-    } else {
-      this.resetToOffAir();
+    const wasPlaying = this.isPlaying;
+    
+    this.setStreamSource();
+    this.currentSong = { title: CONFIG.stationName, artist: '24/7 Live Stream' };
+    this.updateMetadataUI();
+
+    if (wasPlaying) {
+      this.audio.play().catch(e => console.warn('Auto-play blocked:', e));
     }
   }
 
@@ -650,6 +324,7 @@ class RadioPlayer {
   handlePlay() {
     this.isPlaying = true;
     this.reconnectAttempts = 0;
+    this.hideAutoplayPill();
     document.body.classList.add('playing');
     if (this.playIcon) this.playIcon.className = 'fas fa-pause';
     
@@ -675,27 +350,25 @@ class RadioPlayer {
   }
 
   handleEnded() {
-    if (this.isLive) {
-      this.handlePause();
-      this.handleError();
-    } else {
-      if (this.library && this.library.tracks.length > 0) {
-        this.playNextTrack();
-      } else {
-        this.handlePause();
-      }
-    }
+    this.handlePause();
+    this.handleError();
   }
 
   handleError(e) {
-    if (!this.isLive) return;
     console.error('Audio stream error', e);
     this.setUIState('error');
     if (this.reconnectAttempts < CONFIG.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = CONFIG.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1);
       setTimeout(() => {
-        if (this.isLive && this.audio) {
+        if (this.audio) {
+          if (!this.isLive) {
+            // Alternate backup stream if primary failed repeatedly
+            if (this.reconnectAttempts > 2 && this.streams.length > 1) {
+              this.currentStreamIndex = (this.currentStreamIndex + 1) % this.streams.length;
+              this.setStreamSource();
+            }
+          }
           this.audio.load();
           this.audio.play().catch(() => {});
         }
@@ -714,9 +387,7 @@ class RadioPlayer {
   }
 
   handleStalled() {
-    if (this.isLive) {
-      this.setUIState('loading');
-    }
+    this.setUIState('loading');
   }
 
   setUIState(state) {
@@ -748,8 +419,6 @@ class RadioPlayer {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.setActionHandler('play', () => this.togglePlay());
       navigator.mediaSession.setActionHandler('pause', () => this.togglePlay());
-      navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrevTrack());
-      navigator.mediaSession.setActionHandler('nexttrack', () => this.playNextTrack());
       this.updateMediaSession();
     }
   }
@@ -903,6 +572,7 @@ class RadioPlayer {
     });
   }
 }
+
 
 class ScheduleManager {
   constructor() {

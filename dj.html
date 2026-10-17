@@ -975,6 +975,9 @@
                         <div class="deck-title">
                             <i class="fas fa-compact-disc text-gradient"></i>
                             <h3>Music Deck & Playlist</h3>
+                            <span id="dj-saved-songs-badge" class="badge" style="background: rgba(108, 92, 231, 0.25); color: #00CEC9; border: 1px solid rgba(0, 206, 201, 0.4); padding: 3px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; margin-left: 8px;">
+                                <i class="fas fa-save"></i> 0 Saved Songs
+                            </span>
                         </div>
                         <div class="deck-actions">
                             <label for="dj-music-upload" class="btn btn-primary btn-sm">
@@ -1225,6 +1228,7 @@
                 this.deckAudio.crossOrigin = 'anonymous';
                 this.isLooping = true;
                 this.isShuffle = false;
+                this.tracksDB = null;
 
                 // State
                 this.isLive = false;
@@ -1284,6 +1288,7 @@
                     btnLoop: document.getElementById('btn-dj-loop'),
                     btnShuffle: document.getElementById('btn-dj-shuffle'),
                     playlistContainer: document.getElementById('dj-playlist'),
+                    savedBadge: document.getElementById('dj-saved-songs-badge'),
                     // Hotline Elements
                     hotlineBadge: document.getElementById('hotline-badge'),
                     hotlineIdle: document.getElementById('hotline-idle'),
@@ -1334,6 +1339,8 @@
                 if (!this.initialized) {
                     this.setupEventListeners();
                     this.setupDeckEventListeners();
+                    await this.initTracksDB();
+                    await this.loadSavedTracks();
                     this.initialized = true;
                 }
                 this.log('Studio initialized.', 'info');
@@ -1518,7 +1525,7 @@
                 return { title, artist };
             }
 
-            handleDeckFiles(files) {
+            async handleDeckFiles(files) {
                 const audioFiles = Array.from(files).filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
                 if (audioFiles.length === 0) {
                     this.log('Please select audio files (.mp3, .wav, .m4a, etc.)', 'warning');
@@ -1529,19 +1536,23 @@
                 for (const file of audioFiles) {
                     const { title, artist } = this.parseSongName(file.name);
                     const url = URL.createObjectURL(file);
-                    this.playlist.push({
+                    const trackObj = {
                         id: 'dj_track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
                         title,
                         artist,
                         name: file.name,
-                        file,
-                        url
-                    });
+                        blob: file,
+                        url,
+                        dateAdded: Date.now()
+                    };
+                    this.playlist.push(trackObj);
+                    await this.saveTrackToDB(trackObj);
                     count++;
                 }
 
                 this.renderDeckPlaylist();
-                this.log(`Loaded ${count} track(s) into DJ music deck.`, 'success');
+                this.updateSavedBadge();
+                this.log(`Loaded and permanently saved ${count} track(s) in your DJ music deck.`, 'success');
 
                 if (this.currentTrackIndex === -1 && this.playlist.length > 0) {
                     this.selectDeckTrack(0, false);
@@ -1680,10 +1691,15 @@
                 this.els.deckTime.textContent = `${formatDuration(cur)} / ${formatDuration(dur)}`;
             }
 
-            removeDeckTrack(idx) {
+            async removeDeckTrack(idx) {
                 const wasCurrent = this.currentTrackIndex === idx;
-                try { URL.revokeObjectURL(this.playlist[idx].url); } catch (_) {}
+                const trackToRemove = this.playlist[idx];
+                try { URL.revokeObjectURL(trackToRemove.url); } catch (_) {}
+                if (trackToRemove && trackToRemove.id) {
+                    await this.deleteTrackFromDB(trackToRemove.id);
+                }
                 this.playlist.splice(idx, 1);
+                this.updateSavedBadge();
                 
                 if (wasCurrent) {
                     this.pauseDeck();
@@ -1703,19 +1719,24 @@
                 this.renderDeckPlaylist();
             }
 
-            clearDeckPlaylist() {
+            async clearDeckPlaylist() {
+                if (this.playlist.length > 0 && !confirm('Are you sure you want to remove and clear all saved tracks from your DJ deck?')) {
+                    return;
+                }
                 this.pauseDeck();
                 this.playlist.forEach(t => {
                     try { URL.revokeObjectURL(t.url); } catch (_) {}
                 });
                 this.playlist = [];
+                await this.clearAllTracksFromDB();
                 this.currentTrackIndex = -1;
                 this.els.deckTitle.textContent = 'No track selected';
                 this.els.deckArtist.textContent = 'Add MP3/audio files to broadcast music';
                 this.els.deckTime.textContent = '00:00 / 00:00';
                 this.els.scrubberFill.style.width = '0%';
                 this.renderDeckPlaylist();
-                this.log('DJ deck playlist cleared.', 'info');
+                this.updateSavedBadge();
+                this.log('DJ deck playlist cleared and storage emptied.', 'info');
             }
 
             shuffleDeckPlaylist() {
@@ -1725,6 +1746,135 @@
                 }
                 this.renderDeckPlaylist();
                 this.log('Playlist shuffled.', 'info');
+            }
+
+            initTracksDB() {
+                return new Promise((resolve) => {
+                    if (!window.indexedDB) {
+                        console.warn('IndexedDB not supported on this browser');
+                        resolve(null);
+                        return;
+                    }
+                    try {
+                        const request = indexedDB.open('BethelRadioDJTracksDB', 1);
+                        request.onupgradeneeded = (e) => {
+                            const db = e.target.result;
+                            if (!db.objectStoreNames.contains('saved_tracks')) {
+                                db.createObjectStore('saved_tracks', { keyPath: 'id' });
+                            }
+                        };
+                        request.onsuccess = (e) => {
+                            this.tracksDB = e.target.result;
+                            resolve(this.tracksDB);
+                        };
+                        request.onerror = (e) => {
+                            console.warn('IndexedDB open error:', e);
+                            resolve(null);
+                        };
+                    } catch (err) {
+                        console.warn('IndexedDB exception:', err);
+                        resolve(null);
+                    }
+                });
+            }
+
+            async loadSavedTracks() {
+                if (!this.tracksDB) return;
+                return new Promise((resolve) => {
+                    try {
+                        const tx = this.tracksDB.transaction(['saved_tracks'], 'readonly');
+                        const store = tx.objectStore('saved_tracks');
+                        const req = store.getAll();
+                        req.onsuccess = () => {
+                            const records = req.result || [];
+                            if (records.length > 0) {
+                                records.forEach(record => {
+                                    const url = URL.createObjectURL(record.blob);
+                                    this.playlist.push({
+                                        id: record.id,
+                                        title: record.title,
+                                        artist: record.artist,
+                                        name: record.name,
+                                        blob: record.blob,
+                                        url,
+                                        dateAdded: record.dateAdded
+                                    });
+                                });
+                                this.renderDeckPlaylist();
+                                this.updateSavedBadge();
+                                this.log(`Restored ${records.length} saved track(s) from your studio library.`, 'success');
+                                if (this.currentTrackIndex === -1 && this.playlist.length > 0) {
+                                    this.selectDeckTrack(0, false);
+                                }
+                            } else {
+                                this.updateSavedBadge();
+                            }
+                            resolve();
+                        };
+                        req.onerror = () => resolve();
+                    } catch (_) {
+                        resolve();
+                    }
+                });
+            }
+
+            saveTrackToDB(track) {
+                if (!this.tracksDB) return Promise.resolve();
+                return new Promise((resolve) => {
+                    try {
+                        const tx = this.tracksDB.transaction(['saved_tracks'], 'readwrite');
+                        const store = tx.objectStore('saved_tracks');
+                        store.put({
+                            id: track.id,
+                            title: track.title,
+                            artist: track.artist,
+                            name: track.name,
+                            blob: track.blob,
+                            dateAdded: track.dateAdded || Date.now()
+                        });
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => resolve();
+                    } catch (_) {
+                        resolve();
+                    }
+                });
+            }
+
+            deleteTrackFromDB(id) {
+                if (!this.tracksDB) return Promise.resolve();
+                return new Promise((resolve) => {
+                    try {
+                        const tx = this.tracksDB.transaction(['saved_tracks'], 'readwrite');
+                        const store = tx.objectStore('saved_tracks');
+                        store.delete(id);
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => resolve();
+                    } catch (_) {
+                        resolve();
+                    }
+                });
+            }
+
+            clearAllTracksFromDB() {
+                if (!this.tracksDB) return Promise.resolve();
+                return new Promise((resolve) => {
+                    try {
+                        const tx = this.tracksDB.transaction(['saved_tracks'], 'readwrite');
+                        const store = tx.objectStore('saved_tracks');
+                        store.clear();
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => resolve();
+                    } catch (_) {
+                        resolve();
+                    }
+                });
+            }
+
+            updateSavedBadge() {
+                const count = this.playlist.length;
+                if (this.els.savedBadge) {
+                    this.els.savedBadge.innerHTML = `<i class="fas fa-save"></i> ${count} Saved Song${count === 1 ? '' : 's'}`;
+                }
             }
 
             async enumerateDevices() {

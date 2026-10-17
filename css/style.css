@@ -1464,3 +1464,36 @@ input[type=range]::-webkit-slider-thumb:hover {
     color: #ff7675;
 }
 
+/* Autoplay Prompt Pill */
+.autoplay-pill {
+    position: fixed;
+    top: 85px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #6C5CE7, #00CEC9);
+    color: #fff;
+    padding: 10px 22px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 13.5px;
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 30px rgba(108, 92, 231, 0.55);
+    cursor: pointer;
+    animation: pillPulse 2s infinite;
+    transition: opacity 0.3s ease, transform 0.2s ease;
+    font-family: 'Inter', sans-serif;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+}
+.autoplay-pill:hover {
+    transform: translateX(-50%) scale(1.05);
+}
+@keyframes pillPulse {
+    0% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.7); }
+    70% { box-shadow: 0 0 0 14px rgba(108, 92, 231, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0); }
+}
+
