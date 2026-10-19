@@ -1936,27 +1936,81 @@
                                 : 'Connect to Server';
             }
 
-            async wakeServer() {
-                const base = relayHttpBase(this.serverUrl);
-                const controller = new AbortController();
-                const slowNotice = setTimeout(() => {
-                    this.log('Waking relay server from sleep (may take up to 60s)...', 'warning');
-                    this.setStatus('connecting', 'Waking server...');
-                }, 3000);
-                const abort = setTimeout(() => controller.abort(), WAKE_TIMEOUT_MS);
+            prewarmServer(targetUrl) {
                 try {
-                    const res = await fetch(`${base}/health`, { cache: 'no-store', signal: controller.signal });
-                    return res.ok;
-                } catch (err) {
-                    return false;
-                } finally {
-                    clearTimeout(slowNotice);
-                    clearTimeout(abort);
-                }
+                    const url = normalizeRelayUrl(targetUrl || initialRelayUrl());
+                    const base = relayHttpBase(url);
+                    fetch(`${base}/health`, { mode: 'cors', cache: 'no-store' }).catch(() => {});
+
+                    if (this.ws || (this.prewarmWs && (this.prewarmWs.readyState === WebSocket.OPEN || this.prewarmWs.readyState === WebSocket.CONNECTING))) {
+                        return;
+                    }
+                    clearInterval(this.prewarmPing);
+                    clearTimeout(this.prewarmRetry);
+
+                    const pws = new WebSocket(url);
+                    pws.binaryType = 'arraybuffer';
+                    this.prewarmWs = pws;
+                    this.prewarmUrl = url;
+
+                    pws.onopen = () => {
+                        if (this.prewarmWs !== pws) return;
+                        this.prewarmPing = setInterval(() => {
+                            if (pws.readyState === WebSocket.OPEN) {
+                                try { pws.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (_) {}
+                            }
+                        }, 15000);
+                    };
+                    pws.onerror = () => {};
+                    pws.onclose = () => {
+                        if (this.prewarmWs === pws) {
+                            clearInterval(this.prewarmPing);
+                            this.prewarmWs = null;
+                            if (!this.ws && !this.manualDisconnect) {
+                                this.prewarmRetry = setTimeout(() => this.prewarmServer(url), 1500);
+                            }
+                        }
+                    };
+                } catch (_) {}
             }
 
-            async connectToServer() {
+            startClientKeepAlive() {
+                clearInterval(this.clientKeepAlive);
+                this.clientKeepAlive = setInterval(() => {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        try { this.ws.send(JSON.stringify({ type: 'ping', t: Date.now() })); } catch (_) {}
+                    }
+                    const base = relayHttpBase(this.serverUrl);
+                    fetch(`${base}/health`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+                }, 20000);
+            }
+
+            wakeServerInBackground(targetWs) {
+                const base = relayHttpBase(this.serverUrl);
+                const slowNotice = setTimeout(() => {
+                    if (!this.isAuthenticated && this.ws === targetWs) {
+                        this.log('Waking relay server from sleep — connecting automatically...', 'warning');
+                        this.setStatus('connecting', 'Waking server...');
+                    }
+                }, 2500);
+
+                fetch(`${base}/health`, { mode: 'cors', cache: 'no-store' })
+                    .then((res) => {
+                        if (res.ok && !this.isAuthenticated && this.ws === targetWs && targetWs.readyState === WebSocket.CONNECTING) {
+                            // If HTTP health just woke up and initial WS has been stuck connecting for >2s, trigger immediate fresh socket
+                            if (Date.now() - (targetWs._connectStart || 0) > 2000) {
+                                try { targetWs.close(); } catch (_) {}
+                            }
+                        }
+                    })
+                    .catch(() => {})
+                    .finally(() => clearTimeout(slowNotice));
+            }
+
+            connectToServer() {
                 clearTimeout(this.reconnectTimer);
+                clearInterval(this.prewarmPing);
+                clearTimeout(this.prewarmRetry);
                 this.manualDisconnect = false;
                 this.isAuthenticated = false;
 
@@ -1977,46 +2031,64 @@
                     return;
                 }
 
-                this.setStatus('connecting', 'Connecting...');
-                this.log(`Connecting to ${this.serverUrl} ...`, 'info');
+                let ws = null;
+                let reusedPrewarm = false;
 
-                const awake = await this.wakeServer();
-                if (this.manualDisconnect) return;
-                if (!awake) {
-                    this.log(`Relay server unreachable at ${relayHttpBase(this.serverUrl)}.`, 'error');
-                    this.setStatus('disconnected', 'Server unreachable');
-                    this.scheduleReconnect();
-                    return;
+                // Reuse pre-warmed socket if already OPEN or CONNECTING to the same server URL
+                if (this.prewarmWs && this.prewarmUrl === this.serverUrl &&
+                    (this.prewarmWs.readyState === WebSocket.OPEN || this.prewarmWs.readyState === WebSocket.CONNECTING)) {
+                    ws = this.prewarmWs;
+                    this.prewarmWs = null;
+                    reusedPrewarm = true;
+                } else {
+                    if (this.prewarmWs) {
+                        try { this.prewarmWs.onclose = null; this.prewarmWs.close(); } catch (_) {}
+                        this.prewarmWs = null;
+                    }
+                    // Build URL with 0-RTT query auth so server authenticates on handshake immediately
+                    let wsAuthUrl = this.serverUrl;
+                    try {
+                        const u = new URL(this.serverUrl);
+                        if (this.authToken) u.searchParams.set('token', this.authToken);
+                        if (this.djName) u.searchParams.set('djName', this.djName);
+                        wsAuthUrl = u.toString();
+                    } catch (_) {}
+
+                    try {
+                        ws = new WebSocket(wsAuthUrl);
+                    } catch (err) {
+                        this.log('Invalid server URL: ' + err.message, 'error');
+                        this.setStatus('disconnected', 'Disconnected');
+                        return;
+                    }
                 }
 
-                let ws;
-                try {
-                    ws = new WebSocket(this.serverUrl);
-                } catch (err) {
-                    this.log('Invalid server URL: ' + err.message, 'error');
-                    this.setStatus('disconnected', 'Disconnected');
-                    return;
-                }
                 ws.binaryType = 'arraybuffer';
+                ws._connectStart = Date.now();
                 this.ws = ws;
 
-                const openTimeout = setTimeout(() => {
-                    if (ws.readyState === WebSocket.CONNECTING) {
-                        this.log('Connection timed out.', 'error');
-                        ws.close();
-                    }
-                }, 15000);
+                // Kick off non-blocking background wake check in parallel
+                this.wakeServerInBackground(ws);
 
-                ws.onopen = () => {
+                const timeoutMs = this.reconnectAttempts < 3 ? 6500 : 12000;
+                const openTimeout = setTimeout(() => {
+                    if (ws === this.ws && !this.isAuthenticated) {
+                        try { ws.close(); } catch (_) {}
+                    }
+                }, timeoutMs);
+
+                const sendAuth = () => {
                     clearTimeout(openTimeout);
-                    if (ws !== this.ws) return;
+                    if (ws !== this.ws || this.isAuthenticated) return;
                     this.setStatus('connecting', 'Authenticating...');
-                    this.log('Connected to relay server. Authenticating...', 'info');
-                    ws.send(JSON.stringify({ type: 'auth', token: this.authToken, djName: this.djName }));
+                    try {
+                        ws.send(JSON.stringify({ type: 'auth', token: this.authToken, djName: this.djName }));
+                    } catch (_) {}
                 };
 
                 ws.onmessage = (event) => {
                     if (ws !== this.ws || typeof event.data !== 'string') return;
+                    clearTimeout(openTimeout);
                     try {
                         this.handleServerMessage(JSON.parse(event.data));
                     } catch (e) {
@@ -2024,10 +2096,7 @@
                     }
                 };
 
-                ws.onerror = () => {
-                    if (ws !== this.ws) return;
-                    this.log('WebSocket network error occurred.', 'error');
-                };
+                ws.onerror = () => {};
 
                 ws.onclose = (event) => {
                     clearTimeout(openTimeout);
@@ -2050,21 +2119,38 @@
                         this.log('Disconnected.', 'info');
                         return;
                     }
-                    this.log(`Disconnected from server (code ${event.code || 'unknown'}).`, 'warning');
-                    if (wasAuthenticated) this.reconnectAttempts = 0;
+                    if (wasAuthenticated) {
+                        this.log(`Disconnected from server (code ${event.code || 'unknown'}). Reconnecting...`, 'warning');
+                        this.reconnectAttempts = 0;
+                    }
                     this.scheduleReconnect();
                 };
+
+                if (reusedPrewarm && ws.readyState === WebSocket.OPEN) {
+                    sendAuth();
+                } else {
+                    this.setStatus('connecting', 'Connecting...');
+                    if (this.reconnectAttempts === 0) {
+                        this.log(`Connecting to ${this.serverUrl} ...`, 'info');
+                    }
+                    ws.onopen = sendAuth;
+                }
             }
 
             scheduleReconnect() {
                 if (this.manualDisconnect) return;
                 this.reconnectAttempts++;
-                if (this.reconnectAttempts > 10) {
+                if (this.reconnectAttempts > 30) {
                     this.log('Stopped reconnecting. Click "Connect to Server" to retry.', 'error');
                     return;
                 }
-                const delay = Math.min(30000, 2000 * Math.pow(1.6, this.reconnectAttempts - 1));
-                this.log(`Retrying in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts}/10)...`, 'info');
+                // Fast 1s retries for the first 8 attempts so cold starts connect the moment server wakes
+                const delay = this.reconnectAttempts <= 8
+                    ? 1000
+                    : Math.min(10000, 1500 * Math.pow(1.3, this.reconnectAttempts - 8));
+                if (this.reconnectAttempts === 1 || this.reconnectAttempts % 4 === 0) {
+                    this.log(`Reconnecting (attempt ${this.reconnectAttempts})...`, 'info');
+                }
                 this.reconnectTimer = setTimeout(() => this.connectToServer(), delay);
             }
 
@@ -2072,6 +2158,9 @@
                 this.manualDisconnect = true;
                 this.resumeAfterReconnect = false;
                 clearTimeout(this.reconnectTimer);
+                clearInterval(this.clientKeepAlive);
+                clearInterval(this.prewarmPing);
+                clearTimeout(this.prewarmRetry);
                 if (this.isLive) this.stopBroadcasting();
                 if (this.ws) this.ws.close(1000, 'DJ disconnected');
             }
@@ -2086,19 +2175,24 @@
 
             handleServerMessage(msg) {
                 switch (msg.type) {
-                    case 'auth_ok':
+                    case 'auth_ok': {
+                        const alreadyAuthed = this.isAuthenticated;
                         this.isAuthenticated = true;
                         this.reconnectAttempts = 0;
                         this.setStatus('connected', 'Connected');
-                        this.log('Authenticated successfully! You are ready to GO LIVE.', 'success');
                         if (typeof msg.listeners === 'number') this.els.listenerCount.textContent = msg.listeners;
                         if (typeof msg.chatUsers === 'number') this.els.chatUsersBadge.textContent = `${msg.chatUsers} Online`;
-                        if (this.resumeAfterReconnect) {
-                            this.resumeAfterReconnect = false;
-                            this.log('Resuming live broadcast...', 'info');
-                            this.startBroadcasting();
+                        if (!alreadyAuthed) {
+                            this.log('Authenticated successfully! You are ready to GO LIVE.', 'success');
+                            this.startClientKeepAlive();
+                            if (this.resumeAfterReconnect) {
+                                this.resumeAfterReconnect = false;
+                                this.log('Resuming live broadcast...', 'info');
+                                this.startBroadcasting();
+                            }
                         }
                         break;
+                    }
                     case 'auth_fail':
                         this.log('Authentication failed: ' + (msg.message || 'invalid token'), 'error');
                         break;
@@ -2794,7 +2888,12 @@
 
         const storedDJ = sessionStorage.getItem('wave_dj_name');
         const storedToken = sessionStorage.getItem('wave_dj_token');
-        if (storedDJ && storedToken) enterDashboard(storedDJ, storedToken);
+        if (storedDJ && storedToken) {
+            enterDashboard(storedDJ, storedToken);
+        } else {
+            // Pre-open WebSocket handshake while DJ is typing login credentials for instant connection
+            broadcaster.prewarmServer();
+        }
 
         loginForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -2814,6 +2913,10 @@
             dashboard.style.display = 'none';
             loginGate.style.display = 'flex';
             loginPassInput.value = '';
+            setTimeout(() => {
+                broadcaster.manualDisconnect = false;
+                broadcaster.prewarmServer();
+            }, 300);
         });
 
         function escapeHTML(str) {
