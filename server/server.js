@@ -602,6 +602,19 @@ const stats = setInterval(() => {
   sendJSON(djSocket, { type: 'listener_count', count: listeners.size, peak: broadcastInfo.peakListeners });
 }, CONFIG.statsInterval);
 
+// Self-keep-alive: ping public Render URL every 8 minutes so free-tier container stays warm 24/7
+const keepAlive = setInterval(() => {
+  if (!CONFIG.publicUrl || /localhost|127\.0\.0\.1/.test(CONFIG.publicUrl)) return;
+  try {
+    const url = `${CONFIG.publicUrl.replace(/\/$/, '')}/health`;
+    const client = url.startsWith('https') ? https : http;
+    const req = client.get(url, { timeout: 10000 }, (res) => { res.resume(); });
+    req.on('error', () => {});
+    req.on('timeout', () => req.destroy());
+  } catch (_) {}
+}, 8 * 60 * 1000);
+keepAlive.unref();
+
 // --- Process handling ---
 process.on('uncaughtException', (err) => {
   log(`Uncaught exception: ${err.stack || err.message}`);
@@ -612,6 +625,7 @@ function shutdown(signal) {
   log(`${signal} received — shutting down`);
   clearInterval(heartbeat);
   clearInterval(stats);
+  clearInterval(keepAlive);
   endAllListeners();
   for (const ws of wss.clients) ws.terminate();
   server.close(() => process.exit(0));
