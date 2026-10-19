@@ -3,6 +3,7 @@
  * DJ (WebSocket /ws) ──audio──▶ this server ──HTTP /stream──▶ listeners
  */
 const http = require('http');
+const https = require('https');
 const WebSocket = require('ws');
 
 const CONFIG = {
@@ -13,6 +14,7 @@ const CONFIG = {
   heartbeatInterval: 25000, // keep proxies (Render/Railway/Nginx) from killing idle sockets
   statsInterval: 5000,      // push listener count to DJ
   bufferSize: 12,           // recent chunks (~3s at 250ms) for smooth listener joins
+  publicUrl: process.env.RENDER_EXTERNAL_URL || 'https://wave-radio-relay.onrender.com',
 };
 
 // --- State ---
