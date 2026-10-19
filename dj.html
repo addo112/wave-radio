@@ -1336,26 +1336,34 @@
                 this.callerAnimFrame = null;
                 this.ringInterval = null;
                 this.knownListeners = new Map();
+                this.prewarmWs = null;
+                this.prewarmUrl = null;
+                this.prewarmPing = null;
+                this.prewarmRetry = null;
+                this.clientKeepAlive = null;
             }
 
             async init(djName, token) {
                 this.djName = djName;
                 this.authToken = token;
 
-                if (!this.initialized) {
-                    this.setupEventListeners();
-                    this.setupDeckEventListeners();
-                    await this.initTracksDB();
-                    await this.loadSavedTracks();
-                    this.initialized = true;
-                }
-                this.log('Studio initialized.', 'info');
-
                 this.serverUrl = initialRelayUrl();
                 this.els.serverUrl.value = this.serverUrl;
 
-                this.enumerateDevices();
+                if (!this.initialized) {
+                    this.setupEventListeners();
+                    this.setupDeckEventListeners();
+                    this.initialized = true;
+                    // Load saved tracks in parallel so server connection starts at 0ms
+                    this.initTracksDB().then(() => this.loadSavedTracks()).catch(() => {});
+                }
+                this.log('Studio initialized.', 'info');
+
+                // Connect to relay server immediately (zero blocking delay)
                 this.connectToServer();
+
+                // Enumerate microphones in parallel without blocking socket handshake
+                setTimeout(() => this.enumerateDevices(), 20);
             }
 
             setupEventListeners() {
