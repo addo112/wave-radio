@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bethel Radio - DJ Dashboard</title>
+    <link rel="preconnect" href="https://wave-radio-relay.onrender.com" crossorigin>
+    <link rel="dns-prefetch" href="https://wave-radio-relay.onrender.com">
+    <script>
+        // Immediately pre-warm TLS connection & wake relay server at millisecond 0
+        try { fetch('https://wave-radio-relay.onrender.com/health', { mode: 'no-cors', cache: 'no-store' }).catch(function(){}); } catch(e) {}
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
