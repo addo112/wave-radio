@@ -149,7 +149,37 @@ function handleRoot(req, res) {
 
 // --- WebSocket server (DJ & Listeners) ---
 // Accept connections on "/ws" AND "/" so a URL missing the /ws suffix still works.
-const wss = new WebSocket.Server({ noServer: true, maxPayload: 2 * 1024 * 1024 });
+const wss = new WebSocket.Server({
+  noServer: true,
+  maxPayload: 2 * 1024 * 1024,
+  perMessageDeflate: false, // disable compression for fastest handshake & lowest audio latency
+});
+
+function completeDJAuth(ws, djName, ip, authTimeout) {
+  if (djSocket && djSocket !== ws && djSocket.readyState === WebSocket.OPEN) {
+    log('Replacing previous DJ session');
+    sendJSON(djSocket, { type: 'error', message: 'Another DJ session took over' });
+    djSocket.terminate();
+    resetBroadcast();
+  }
+
+  clearTimeout(authTimeout);
+  ws.role = 'dj';
+  djSocket = ws;
+  broadcastInfo.djName = (djName || 'DJ').toString().slice(0, 50);
+  log(`DJ authenticated: ${broadcastInfo.djName}`);
+  sendJSON(ws, {
+    type: 'auth_ok',
+    listeners: listeners.size,
+    chatUsers: activeListeners.size,
+    activeCall: currentCall ? { callerId: currentCall.callerId, callerName: currentCall.callerName, onAir: currentCall.onAir } : null
+  });
+
+  // Notify active listeners that DJ is online
+  for (const l of activeListeners.values()) {
+    sendJSON(l.ws, { type: 'dj_status', online: true, djName: broadcastInfo.djName });
+  }
+}
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url, 'http://localhost');
@@ -157,6 +187,10 @@ server.on('upgrade', (req, socket, head) => {
     socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
     return socket.destroy();
   }
+  try {
+    socket.setNoDelay(true);
+    socket.setKeepAlive(true, 15000);
+  } catch (_) {}
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
@@ -170,13 +204,28 @@ wss.on('connection', (ws, req) => {
   ws.listenerName = null;
   ws.on('pong', () => { ws.isAlive = true; });
 
-  // Drop sockets that never send handshake within 15s
+  // Drop sockets that never send handshake within 60s (allows pre-warmed login sockets)
   const authTimeout = setTimeout(() => {
     if (!ws.role) {
       sendJSON(ws, { type: 'auth_fail', message: 'Handshake timeout' });
       ws.close(4001, 'Handshake timeout');
     }
-  }, 15000);
+  }, 60000);
+
+  // Instant 0-RTT DJ authentication if token is provided in WebSocket query string
+  try {
+    const reqUrl = new URL(req.url, 'http://localhost');
+    const urlToken = reqUrl.searchParams.get('token');
+    if (urlToken !== null && urlToken !== '') {
+      if (urlToken !== CONFIG.djPassword) {
+        clearTimeout(authTimeout);
+        log(`Auth failed from ${ip} (query param)`);
+        sendJSON(ws, { type: 'auth_fail', message: 'Invalid DJ password' });
+        return ws.close(4003, 'Invalid password');
+      }
+      completeDJAuth(ws, reqUrl.searchParams.get('djName'), ip, authTimeout);
+    }
+  } catch (_) {}
 
   // NOTE: ws v8 delivers ALL messages as Buffers; `isBinary` distinguishes text from audio.
   ws.on('message', (data, isBinary) => {
@@ -186,6 +235,10 @@ wss.on('connection', (ws, req) => {
       let msg;
       try { msg = JSON.parse(data.toString()); } catch { return ws.close(4002, 'Bad handshake payload'); }
 
+      if (msg.type === 'ping') {
+        return sendJSON(ws, { type: 'pong', t: msg.t });
+      }
+
       // 1. DJ Handshake / Auth
       if (msg.type === 'auth') {
         if (msg.token !== CONFIG.djPassword) {
@@ -193,31 +246,7 @@ wss.on('connection', (ws, req) => {
           sendJSON(ws, { type: 'auth_fail', message: 'Invalid DJ password' });
           return ws.close(4003, 'Invalid password');
         }
-
-        // Replace previous DJ session if any
-        if (djSocket && djSocket !== ws && djSocket.readyState === WebSocket.OPEN) {
-          log('Replacing previous DJ session');
-          sendJSON(djSocket, { type: 'error', message: 'Another DJ session took over' });
-          djSocket.terminate();
-          resetBroadcast();
-        }
-
-        clearTimeout(authTimeout);
-        ws.role = 'dj';
-        djSocket = ws;
-        broadcastInfo.djName = (msg.djName || 'DJ').toString().slice(0, 50);
-        log(`DJ authenticated: ${broadcastInfo.djName}`);
-        sendJSON(ws, {
-          type: 'auth_ok',
-          listeners: listeners.size,
-          chatUsers: activeListeners.size,
-          activeCall: currentCall ? { callerId: currentCall.callerId, callerName: currentCall.callerName, onAir: currentCall.onAir } : null
-        });
-
-        // Notify active listeners that DJ is online
-        for (const l of activeListeners.values()) {
-          sendJSON(l.ws, { type: 'dj_status', online: true, djName: broadcastInfo.djName });
-        }
+        completeDJAuth(ws, msg.djName, ip, authTimeout);
         return;
       }
 
@@ -286,6 +315,16 @@ wss.on('connection', (ws, req) => {
       try { msg = JSON.parse(data.toString()); } catch { return log('Invalid control message from DJ'); }
 
       switch (msg.type) {
+        case 'auth':
+          if (msg.djName) broadcastInfo.djName = msg.djName.toString().slice(0, 50);
+          sendJSON(ws, {
+            type: 'auth_ok',
+            listeners: listeners.size,
+            chatUsers: activeListeners.size,
+            activeCall: currentCall ? { callerId: currentCall.callerId, callerName: currentCall.callerName, onAir: currentCall.onAir } : null
+          });
+          break;
+
         case 'start':
           resetBroadcast();
           broadcastInfo.isLive = true;
