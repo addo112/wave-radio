@@ -996,10 +996,10 @@ class UIManager {
       return;
     }
 
-    // Update QR code dynamically to point to current origin's APK download URL
+    // Update QR code to point to official GitHub Release direct APK download URL
     const qrImg = document.getElementById('app-qr-img');
-    if (qrImg && window.location.origin && window.location.protocol.startsWith('http')) {
-      const apkUrl = `${window.location.origin}/downloads/BethelRadio.apk`;
+    if (qrImg) {
+      const apkUrl = 'https://github.com/addo112/wave-radio/releases/download/v1.0.0/BethelRadio.apk';
       qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=6&data=${encodeURIComponent(apkUrl)}`;
     }
 
