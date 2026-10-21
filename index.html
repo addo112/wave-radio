@@ -8,8 +8,9 @@
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#6C5CE7">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     
     <!-- Open Graph / Social Media -->
     <meta property="og:title" content="Bethel Radio - Feel The Frequency">
@@ -455,6 +456,7 @@
                 <h4>Quick Links</h4>
                 <ul>
                     <li><a href="#home">Home</a></li>
+                    <li><a href="#mobile-app"><i class="fab fa-android"></i> Android App</a></li>
                     <li><a href="#schedule">Schedule</a></li>
                     <li><a href="#about">About</a></li>
                     <li><a href="#contact">Contact</a></li>
@@ -475,6 +477,53 @@
             <p class="powered-by">Powered by Bethel Radio</p>
         </div>
     </footer>
+
+    <!-- Android App Installation Guide Modal -->
+    <div id="android-install-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="install-modal-title">
+        <div class="modal-card install-modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fab fa-android" style="color: #3DDC84; font-size: 1.6rem;"></i>
+                    <h3 id="install-modal-title">Install Bethel Radio on Android</h3>
+                </div>
+                <button type="button" id="close-install-modal" class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="install-modal-status" class="install-status-banner">
+                    <i class="fas fa-circle-check"></i>
+                    <div>
+                        <strong>Downloading <code>BethelRadio.apk</code>...</strong>
+                        <p>Check your browser's download bar or notification tray once the download finishes.</p>
+                    </div>
+                </div>
+
+                <div class="install-guide-options">
+                    <div class="install-option-box">
+                        <h4><i class="fab fa-android"></i> Option 1: Install Downloaded APK (Recommended)</h4>
+                        <ol class="install-ordered-steps">
+                            <li>Tap <strong>Open</strong> when <code>BethelRadio.apk</code> finishes downloading (or find it in your phone's <strong>Downloads</strong> app).</li>
+                            <li>If your phone asks for permission, tap <strong>Settings</strong> &rarr; toggle on <strong>"Allow from this source"</strong>.</li>
+                            <li>Tap <strong>Install</strong>, then tap <strong>Open</strong> to launch Bethel Radio!</li>
+                        </ol>
+                        <a href="/downloads/BethelRadio.apk" download="BethelRadio.apk" class="btn-apk-modal-retry">
+                            <i class="fas fa-download"></i> Download BethelRadio.apk Again
+                        </a>
+                    </div>
+
+                    <div class="install-option-box">
+                        <h4><i class="fas fa-bolt"></i> Option 2: Instant Browser App Install</h4>
+                        <p>You can also install Bethel Radio directly from Chrome/Edge/Samsung Internet with a single tap:</p>
+                        <button type="button" class="btn-pwa-modal" data-pwa-install>
+                            <i class="fas fa-mobile-screen-button"></i> Instant Install to Home Screen
+                        </button>
+                        <p class="install-browser-tip">
+                            <i class="fas fa-ellipsis-vertical"></i> Or tap your browser's <strong>Menu (&vellip;)</strong> at the top-right and select <strong>"Install app"</strong> or <strong>"Add to Home screen"</strong>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Container -->
     <div id="toast-container"></div>
