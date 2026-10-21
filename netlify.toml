@@ -47,14 +47,14 @@
   for = "/*.apk"
   [headers.values]
     Content-Type = "application/vnd.android.package-archive"
-    Content-Disposition = "attachment; filename=\"BethelRadio.apk\""
+    Content-Disposition = "attachment; filename=BethelRadio.apk"
     Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/downloads/*.apk"
   [headers.values]
     Content-Type = "application/vnd.android.package-archive"
-    Content-Disposition = "attachment; filename=\"BethelRadio.apk\""
+    Content-Disposition = "attachment; filename=BethelRadio.apk"
     Cache-Control = "public, max-age=0, must-revalidate"
 
 # Redirects for SPA
