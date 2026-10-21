@@ -3,7 +3,7 @@
  * - Network-first for same-origin pages/assets (always get the latest deploy, fall back to cache offline)
  * - Never touches non-GET requests or cross-origin requests (audio streams, relay server, CDNs)
  */
-const CACHE_NAME = 'bethel-radio-cache-v2';
+const CACHE_NAME = 'bethel-radio-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,6 +13,8 @@ const STATIC_ASSETS = [
   '/js/dj-bridge.js',
   '/js/listener-chat-call.js',
   '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {

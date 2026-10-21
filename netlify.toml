@@ -37,6 +37,26 @@
   [headers.values]
     Cache-Control = "no-cache"
 
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/*.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment; filename=\"BethelRadio.apk\""
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/downloads/*.apk"
+  [headers.values]
+    Content-Type = "application/vnd.android.package-archive"
+    Content-Disposition = "attachment; filename=\"BethelRadio.apk\""
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 # Redirects for SPA
 [[redirects]]
   from = "/api/*"
