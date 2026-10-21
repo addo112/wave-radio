@@ -4,7 +4,7 @@
   "description": "Bethel Radio - Feel The Frequency. 24/7 Internet Radio Station",
   "scripts": {
     "dev": "netlify dev",
-    "build": "echo 'Static site - no build needed'",
+    "build": "node scripts/build-apk.mjs",
     "deploy": "netlify deploy --prod"
   },
   "keywords": ["radio", "streaming", "music", "netlify"],
