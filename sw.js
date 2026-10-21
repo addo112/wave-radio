@@ -42,6 +42,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;           // audio streams, relay server, CDNs
   if (url.pathname.startsWith('/.netlify/') || url.pathname.startsWith('/api/')) return;
+  if (url.pathname.endsWith('.apk')) return;                 // APK downloads
   if (request.headers.get('range')) return;                   // media range requests
 
   event.respondWith(
