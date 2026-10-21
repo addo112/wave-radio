@@ -1,0 +1,105 @@
+name: Build Bethel Radio Android APK
+
+on:
+  push:
+    branches: [ master, main ]
+    paths-ignore:
+      - 'downloads/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build & Sign BethelRadio.apk
+        run: |
+          set -euo pipefail
+
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME/build-tools/"* | sort -V | tail -n 1)
+          PLATFORM_JAR=$(ls "$ANDROID_HOME/platforms/"android-*/android.jar | sort -V | tail -n 1)
+          echo "Using build-tools: $BUILD_TOOLS"
+          echo "Using platform jar: $PLATFORM_JAR"
+
+          rm -rf build
+          mkdir -p build/gen build/classes build/dex build/assets downloads
+          mkdir -p android-app/res/mipmap-hdpi android-app/res/mipmap-xxxhdpi
+
+          # Copy app icons into Android mipmap resource directories
+          cp icons/icon-192.png android-app/res/mipmap-hdpi/ic_launcher.png
+          cp icons/icon-512.png android-app/res/mipmap-xxxhdpi/ic_launcher.png
+
+          # Bundle web listener assets into APK assets/
+          cp index.html manifest.json build/assets/
+          cp -r css js icons img build/assets/
+
+          # 1. Compile Android resources
+          "$BUILD_TOOLS/aapt2" compile --dir android-app/res -o build/res.zip
+
+          # 2. Link resources and package assets into base APK
+          "$BUILD_TOOLS/aapt2" link \
+            -o build/unsigned-unaligned.apk \
+            -I "$PLATFORM_JAR" \
+            --manifest android-app/AndroidManifest.xml \
+            --java build/gen \
+            -A build/assets \
+            --auto-add-overlay \
+            build/res.zip
+
+          # 3. Compile Java sources
+          find android-app/src build/gen -name "*.java" > build/sources.txt
+          javac --release 8 -classpath "$PLATFORM_JAR" -d build/classes @build/sources.txt
+
+          # 4. Convert JVM bytecode to Dalvik bytecode (classes.dex)
+          "$BUILD_TOOLS/d8" --lib "$PLATFORM_JAR" --output build/dex $(find build/classes -name "*.class")
+
+          # 5. Add classes.dex to APK root
+          (cd build/dex && zip -uj ../unsigned-unaligned.apk classes.dex)
+
+          # 6. Align APK on 4-byte boundaries
+          "$BUILD_TOOLS/zipalign" -f -p 4 build/unsigned-unaligned.apk build/unsigned-aligned.apk
+
+          # 7. Generate release signing key and sign APK (v1 + v2 + v3 schemes)
+          keytool -genkeypair -v \
+            -keystore build/bethel-release.keystore \
+            -alias bethelradio \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass bethelradio2024 -keypass bethelradio2024 \
+            -dname "CN=Bethel Radio, OU=Mobile, O=Bethel Radio, L=Kumasi, S=Ashanti, C=GH"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks build/bethel-release.keystore \
+            --ks-key-alias bethelradio \
+            --ks-pass pass:bethelradio2024 \
+            --key-pass pass:bethelradio2024 \
+            --out downloads/BethelRadio.apk \
+            build/unsigned-aligned.apk
+
+          "$BUILD_TOOLS/apksigner" verify --verbose downloads/BethelRadio.apk
+          ls -lh downloads/BethelRadio.apk
+
+      - name: Commit & Push Signed APK to Repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f downloads/BethelRadio.apk
+          if git diff --cached --quiet; then
+            echo "APK unchanged"
+          else
+            git commit -m "chore(android): build and publish signed BethelRadio.apk [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi

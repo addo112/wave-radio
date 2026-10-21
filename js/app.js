@@ -430,8 +430,8 @@ class RadioPlayer {
         artist: this.currentSong.artist,
         album: CONFIG.stationName,
         artwork: [
-          { src: '/img/logo-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/img/logo-512.png', sizes: '512x512', type: 'image/png' }
+          { src: 'img/logo-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'img/logo-512.png', sizes: '512x512', type: 'image/png' }
         ]
       });
     }
@@ -553,11 +553,26 @@ class RadioPlayer {
 
   async fetchListenerCount() {
     try {
-      const response = await fetchWithTimeout('/.netlify/functions/track-listener', { timeout: 5000 });
-      if (response.ok) {
-        const data = await response.json();
-        if (this.listenerCountDisplay && data.count !== undefined) {
-          this.listenerCountDisplay.innerHTML = `<i class="fas fa-users"></i> ${data.count.toLocaleString()} Listening`;
+      if (window.location.protocol !== 'file:') {
+        const response = await fetchWithTimeout('/.netlify/functions/track-listener', { timeout: 5000 });
+        if (response.ok) {
+          const data = await response.json();
+          if (this.listenerCountDisplay && data.count !== undefined) {
+            this.listenerCountDisplay.innerHTML = `<i class="fas fa-users"></i> ${data.count.toLocaleString()} Listening`;
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Fallback (e.g. inside native Android APK): check relay server status
+    try {
+      const relayRes = await fetchWithTimeout('https://wave-radio-relay.onrender.com/status', { timeout: 5000 });
+      if (relayRes.ok) {
+        const relayData = await relayRes.json();
+        const count = Math.max(1, (relayData.listeners || 0) + (relayData.chatUsers || 0));
+        if (this.listenerCountDisplay) {
+          this.listenerCountDisplay.innerHTML = `<i class="fas fa-users"></i> ${count.toLocaleString()} Listening`;
         }
       }
     } catch (_) {}
@@ -712,6 +727,7 @@ class UIManager {
     this.setupCookieConsent();
     this.setupContactForm();
     this.setupKeyboardShortcuts();
+    this.setupAndroidAppInstall();
     this.registerServiceWorker();
     
     // CSS transitions helper
@@ -965,8 +981,106 @@ class UIManager {
     });
   }
 
+  setupAndroidAppInstall() {
+    this.deferredInstallPrompt = null;
+
+    // Detect if already running inside the native Android APK
+    const isNativeApk = Boolean(
+      window.BethelNativeApp ||
+      window.location.protocol === 'file:' ||
+      navigator.userAgent.includes('BethelRadioAndroidApp')
+    );
+
+    if (isNativeApk) {
+      document.body.classList.add('is-native-app');
+      return;
+    }
+
+    // Update QR code dynamically to point to current origin's APK download URL
+    const qrImg = document.getElementById('app-qr-img');
+    if (qrImg && window.location.origin && window.location.protocol.startsWith('http')) {
+      const apkUrl = `${window.location.origin}/downloads/BethelRadio.apk`;
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=6&data=${encodeURIComponent(apkUrl)}`;
+    }
+
+    // Capture browser's native PWA / WebAPK install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredInstallPrompt = e;
+      document.querySelectorAll('[data-pwa-install]').forEach((btn) => {
+        btn.classList.add('pwa-ready');
+      });
+    });
+
+    window.addEventListener('appinstalled', () => {
+      this.deferredInstallPrompt = null;
+      this.showToast('Bethel Radio app installed on your phone!', 'success', 5000);
+      this.closeInstallModal();
+    });
+
+    // Modal controls
+    const modal = document.getElementById('android-install-modal');
+    const closeBtn = document.getElementById('close-install-modal');
+    const openGuideBtn = document.getElementById('open-install-guide-btn');
+    const modalStatus = document.getElementById('install-modal-status');
+
+    this.openInstallModal = (isDownloadingApk = false) => {
+      if (!modal) return;
+      if (modalStatus) {
+        modalStatus.style.display = isDownloadingApk ? 'flex' : 'none';
+      }
+      modal.classList.remove('hidden');
+    };
+
+    this.closeInstallModal = () => {
+      if (!modal) return;
+      modal.classList.add('hidden');
+    };
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeInstallModal());
+    }
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this.closeInstallModal();
+      });
+    }
+    if (openGuideBtn) {
+      openGuideBtn.addEventListener('click', () => this.openInstallModal(false));
+    }
+
+    // Handle APK Download button clicks
+    document.querySelectorAll('[data-apk-download]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.showToast('Downloading BethelRadio.apk — open the file when finished to install!', 'success', 6000);
+        setTimeout(() => this.openInstallModal(true), 400);
+      });
+    });
+
+    // Handle Instant Install (WebAPK / PWA) button clicks
+    document.querySelectorAll('[data-pwa-install]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (this.deferredInstallPrompt) {
+          try {
+            this.deferredInstallPrompt.prompt();
+            const { outcome } = await this.deferredInstallPrompt.userChoice;
+            if (outcome === 'accepted') {
+              this.showToast('Installing Bethel Radio to your phone...', 'success', 5000);
+            }
+            this.deferredInstallPrompt = null;
+          } catch (_) {
+            this.openInstallModal(false);
+          }
+        } else {
+          // If browser didn't fire beforeinstallprompt (or already installed), show modal with APK + manual instructions
+          this.openInstallModal(false);
+        }
+      });
+    });
+  }
+
   registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
+    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(err => {
           console.log('ServiceWorker registration failed: ', err);

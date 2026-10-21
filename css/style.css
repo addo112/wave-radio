@@ -1497,3 +1497,733 @@ input[type=range]::-webkit-slider-thumb:hover {
     100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0); }
 }
 
+
+/* ==========================================================================
+   Android Mobile App Download Section & Install UI
+   ========================================================================== */
+.app-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #3DDC84 !important;
+    font-weight: 600 !important;
+}
+
+.app-nav-link i {
+    font-size: 1.05rem;
+}
+
+/* Hero App Quick Download Banner */
+.hero-app-banner {
+    margin-top: 22px;
+    padding: 16px 24px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    max-width: 720px;
+    width: 100%;
+    border: 1px solid rgba(61, 220, 132, 0.35);
+    background: linear-gradient(135deg, rgba(26, 26, 46, 0.88), rgba(18, 38, 32, 0.85));
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
+}
+
+.hero-app-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+}
+
+.hero-app-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    background: rgba(61, 220, 132, 0.16);
+    border: 1px solid rgba(61, 220, 132, 0.4);
+    color: #3DDC84;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.55rem;
+    flex-shrink: 0;
+}
+
+.hero-app-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.hero-app-text strong {
+    font-size: 0.98rem;
+    color: #ffffff;
+}
+
+.hero-app-text span {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.hero-app-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.btn-apk-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #2ecc71, #00b894);
+    color: #06140e;
+    font-weight: 700;
+    font-size: 0.88rem;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    box-shadow: 0 6px 20px rgba(46, 204, 113, 0.35);
+}
+
+.btn-apk-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(46, 204, 113, 0.55);
+    color: #06140e;
+}
+
+.btn-pwa-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 16px;
+    border-radius: 50px;
+    background: rgba(108, 92, 231, 0.22);
+    border: 1px solid rgba(162, 155, 254, 0.45);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: inherit;
+}
+
+.btn-pwa-install:hover {
+    background: var(--primary);
+    transform: translateY(-2px);
+}
+
+/* Main Mobile App Section */
+.app-download-section {
+    position: relative;
+    overflow: hidden;
+}
+
+.app-showcase {
+    display: grid;
+    grid-template-columns: 1.35fr 0.85fr;
+    gap: 48px;
+    padding: 48px;
+    border-radius: 30px;
+    border: 1px solid rgba(108, 92, 231, 0.35);
+    background: radial-gradient(circle at top right, rgba(61, 220, 132, 0.10), transparent 55%),
+                radial-gradient(circle at bottom left, rgba(108, 92, 231, 0.16), transparent 60%),
+                rgba(22, 22, 36, 0.85);
+    align-items: center;
+}
+
+.app-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 50px;
+    background: rgba(61, 220, 132, 0.14);
+    border: 1px solid rgba(61, 220, 132, 0.4);
+    color: #3DDC84;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    margin-bottom: 16px;
+}
+
+.app-showcase-content h2 {
+    font-size: 2.3rem;
+    line-height: 1.2;
+    margin-bottom: 16px;
+}
+
+.app-showcase-lead {
+    color: var(--text-secondary);
+    font-size: 1.03rem;
+    line-height: 1.65;
+    margin-bottom: 28px;
+}
+
+.app-features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 30px;
+}
+
+.app-feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+}
+
+.app-feature-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: var(--gradient-1);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.app-feature-item h4 {
+    margin: 0 0 4px 0;
+    font-size: 1.02rem;
+    color: #ffffff;
+}
+
+.app-feature-item p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.app-download-cta-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.btn-apk-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 24px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #3DDC84, #00b894);
+    color: #05160e;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    box-shadow: 0 10px 28px rgba(61, 220, 132, 0.35);
+}
+
+.btn-apk-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 35px rgba(61, 220, 132, 0.5);
+    color: #05160e;
+}
+
+.btn-apk-primary > i.fa-android {
+    font-size: 2rem;
+}
+
+.btn-apk-arrow {
+    font-size: 1.1rem;
+    opacity: 0.85;
+    margin-left: 4px;
+}
+
+.btn-apk-text {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    line-height: 1.25;
+}
+
+.btn-apk-text small {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+    opacity: 0.85;
+}
+
+.btn-apk-text strong {
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+
+.btn-pwa-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 22px;
+    border-radius: 18px;
+    background: rgba(108, 92, 231, 0.18);
+    border: 1px solid rgba(162, 155, 254, 0.45);
+    color: #ffffff;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.25s ease;
+}
+
+.btn-pwa-secondary > i {
+    font-size: 1.65rem;
+    color: var(--secondary);
+}
+
+.btn-pwa-secondary:hover {
+    background: rgba(108, 92, 231, 0.35);
+    border-color: var(--secondary);
+    transform: translateY(-3px);
+}
+
+.app-meta-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 18px;
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    margin-bottom: 26px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.app-meta-bar span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.app-meta-bar i {
+    color: #3DDC84;
+}
+
+.app-help-link {
+    background: none;
+    border: none;
+    color: var(--primary-light);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: underline;
+    font-family: inherit;
+}
+
+.app-help-link:hover {
+    color: var(--secondary);
+}
+
+/* 3-Step Installation Guide */
+.app-install-steps h4 {
+    font-size: 0.95rem;
+    margin: 0 0 12px 0;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-install-steps h4 i {
+    color: var(--secondary);
+}
+
+.install-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.install-step-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.step-num {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--gradient-1);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.78rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.install-step-card strong {
+    font-size: 0.88rem;
+    color: #ffffff;
+}
+
+.install-step-card p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+}
+
+.install-step-card code {
+    color: #3DDC84;
+    font-size: 0.75rem;
+}
+
+/* Phone Mockup & QR Code */
+.app-showcase-visual {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+}
+
+.phone-mockup {
+    width: 260px;
+    background: #07070c;
+    border: 6px solid #252538;
+    border-radius: 38px;
+    padding: 14px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), 0 0 30px rgba(108, 92, 231, 0.25);
+    position: relative;
+}
+
+.phone-notch {
+    width: 90px;
+    height: 14px;
+    background: #252538;
+    border-radius: 0 0 12px 12px;
+    margin: -14px auto 12px;
+}
+
+.phone-screen {
+    background: linear-gradient(165deg, #16162a 0%, #0a0a12 100%);
+    border-radius: 26px;
+    padding: 16px 14px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.phone-status-bar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+}
+
+.phone-live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 50px;
+    background: rgba(231, 76, 60, 0.2);
+    border: 1px solid rgba(231, 76, 60, 0.5);
+    color: #ff7675;
+    font-size: 0.68rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.phone-art {
+    width: 96px;
+    height: 96px;
+    border-radius: 22px;
+    background: var(--gradient-1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+    box-shadow: 0 10px 25px rgba(108, 92, 231, 0.45);
+    overflow: hidden;
+    position: relative;
+}
+
+.phone-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: relative;
+    z-index: 2;
+}
+
+.phone-art-fallback {
+    font-size: 2.2rem;
+    color: #fff;
+    position: absolute;
+    z-index: 1;
+}
+
+.phone-track-title {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.phone-track-sub {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+}
+
+.phone-eq {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 22px;
+    margin-bottom: 16px;
+}
+
+.phone-eq span {
+    width: 4px;
+    background: var(--gradient-1);
+    border-radius: 2px;
+    animation: equalizerBar 0.8s ease-in-out infinite alternate;
+}
+
+.phone-eq span:nth-child(2) { animation-delay: 0.2s; }
+.phone-eq span:nth-child(3) { animation-delay: 0.4s; }
+.phone-eq span:nth-child(4) { animation-delay: 0.1s; }
+.phone-eq span:nth-child(5) { animation-delay: 0.3s; }
+
+.phone-play-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--gradient-1);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    margin-bottom: 16px;
+    box-shadow: 0 6px 18px rgba(108, 92, 231, 0.5);
+}
+
+.phone-bottom-actions {
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.72rem;
+    color: var(--secondary);
+    font-weight: 600;
+}
+
+.qr-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    max-width: 310px;
+}
+
+.qr-code-box {
+    width: 82px;
+    height: 82px;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 4px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qr-code-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.qr-card-text strong {
+    display: block;
+    font-size: 0.85rem;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.qr-card-text p {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* Install Guide Modal Styles */
+.install-modal-card {
+    max-width: 560px;
+}
+
+.install-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-radius: 14px;
+    background: rgba(61, 220, 132, 0.14);
+    border: 1px solid rgba(61, 220, 132, 0.4);
+}
+
+.install-status-banner i {
+    font-size: 1.6rem;
+    color: #3DDC84;
+}
+
+.install-status-banner strong {
+    display: block;
+    color: #ffffff;
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+}
+
+.install-status-banner p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.install-guide-options {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.install-option-box {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 16px;
+    padding: 18px 20px;
+}
+
+.install-option-box h4 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.install-ordered-steps {
+    margin: 0 0 14px 0;
+    padding-left: 20px;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.65;
+}
+
+.install-ordered-steps li {
+    margin-bottom: 6px;
+}
+
+.install-ordered-steps strong {
+    color: #ffffff;
+}
+
+.btn-apk-modal-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #3DDC84, #00b894);
+    color: #05160e;
+    font-weight: 700;
+    font-size: 0.86rem;
+    text-decoration: none;
+}
+
+.btn-pwa-modal {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: var(--gradient-1);
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+    margin: 8px 0 10px;
+    font-family: inherit;
+}
+
+.install-browser-tip {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Hide app download prompts and DJ admin link when running inside the installed Android listener app */
+body.is-native-app #hero-app-banner,
+body.is-native-app #mobile-app,
+body.is-native-app .app-nav-link,
+body.is-native-app a[href="dj.html"] {
+    display: none !important;
+}
+
+@media (max-width: 992px) {
+    .app-showcase {
+        grid-template-columns: 1fr;
+        padding: 32px 24px;
+    }
+
+    .install-steps-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .hero-app-banner {
+        flex-direction: column;
+        text-align: center;
+        padding: 16px;
+    }
+
+    .hero-app-info {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .hero-app-actions {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .app-showcase-content h2 {
+        font-size: 1.75rem;
+    }
+
+    .app-download-cta-group {
+        flex-direction: column;
+    }
+
+    .btn-apk-primary,
+    .btn-pwa-secondary {
+        width: 100%;
+        justify-content: center;
+    }
+}
